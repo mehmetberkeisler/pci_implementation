@@ -1,0 +1,60 @@
+# ── Raw EEG / patient data (DO NOT COMMIT) ────────────────────────────────
+# Binary BrainVision data files are large and may contain identifiable data.
+# Keep .vhdr/.vmrk text headers if you want — they're small and don't hold
+# sample values — but scrub them first if they contain subject IDs.
+*.eeg
+*.edf
+*.fif
+*.set
+*.fdt
+
+# Large session-split dataset folder
+TEPS_split/
+
+# ── Generated reports / scratch outputs ───────────────────────────────────
+*_report.html
+pci_analysis_report.html
+output/
+tmp/
+
+# ── Legacy / backup files ─────────────────────────────────────────────────
+*.bak
+.app_legacy.py.bak
+
+# ── LaTeX build artifacts (keep the .tex and the .pdf) ────────────────────
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+
+# ── Python ────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+
+# ── Virtualenvs ───────────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Editor / OS ───────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Streamlit local secrets (keep config.toml, ignore secrets) ────────────
+.streamlit/secrets.toml
+
+# ── Jupyter checkpoints ───────────────────────────────────────────────────
+.ipynb_checkpoints/

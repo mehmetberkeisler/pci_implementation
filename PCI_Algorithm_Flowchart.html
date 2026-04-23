@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PCI Calculator — Project Overview &amp; Algorithm Flowchart</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg, #f0f4f8 0%, #e8eef4 100%);
+    padding: 32px 20px;
+    color: #1a2b3c;
+    line-height: 1.6;
+  }
+
+  /* ── Page header ── */
+  .page-header {
+    max-width: 960px;
+    margin: 0 auto 40px;
+    text-align: center;
+  }
+  .page-title {
+    font-size: 32px;
+    font-weight: 800;
+    color: #0d2137;
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+  .page-subtitle {
+    font-size: 15px;
+    color: #5b7a93;
+    margin-bottom: 12px;
+  }
+  .page-meta {
+    display: inline-flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 12px;
+    color: #7a95ab;
+  }
+  .page-meta span {
+    background: #e0eaf4;
+    padding: 3px 10px;
+    border-radius: 12px;
+  }
+
+  /* ── Section container ── */
+  .section {
+    max-width: 960px;
+    margin: 0 auto 36px;
+  }
+  .section-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: #0d2137;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 3px solid #2d6a8a;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title .icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  /* ── Info cards ── */
+  .info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+  @media (max-width: 700px) { .info-grid { grid-template-columns: 1fr; } }
+  .info-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 18px 20px;
+    box-shadow: 0 2px 12px rgba(15,40,65,0.06);
+    border-left: 4px solid #2d6a8a;
+  }
+  .info-card.wide { grid-column: 1 / -1; }
+  .info-card h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1a3a55;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .info-card p, .info-card ul {
+    font-size: 13.5px;
+    color: #3a5a70;
+  }
+  .info-card ul { padding-left: 18px; margin-top: 4px; }
+  .info-card li { margin-bottom: 3px; }
+  .info-card code {
+    background: #eef3f8;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12.5px;
+    color: #2a5070;
+  }
+  .info-card.accent-orange { border-left-color: #c07030; }
+  .info-card.accent-green  { border-left-color: #2d6b4a; }
+  .info-card.accent-purple { border-left-color: #724d8a; }
+  .info-card.accent-red    { border-left-color: #bf4a4a; }
+
+  /* ── Equation block ── */
+  .equation-block {
+    background: #fff;
+    border: 2px solid #c8d8e8;
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin: 16px 0;
+    text-align: center;
+  }
+  .equation-block .eq {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 22px;
+    color: #1a3050;
+    margin: 8px 0;
+    letter-spacing: 0.5px;
+  }
+  .equation-block .eq-label {
+    font-size: 12px;
+    color: #7a95ab;
+    margin-top: 6px;
+  }
+  .equation-block .eq-desc {
+    font-size: 13px;
+    color: #4a6a80;
+    margin-top: 10px;
+    text-align: left;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 12px;
+  }
+  .equation-block .eq-desc dt {
+    font-family: 'Georgia', serif;
+    font-weight: 600;
+    color: #2a5070;
+    text-align: right;
+  }
+
+  /* ── Flowchart ── */
+  .flowchart {
+    max-width: 880px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  .arrow {
+    width: 3px;
+    height: 28px;
+    background: #94afc4;
+    position: relative;
+  }
+  .arrow::after {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 7px solid transparent;
+    border-right: 7px solid transparent;
+    border-top: 8px solid #94afc4;
+  }
+
+  /* ── Step cards ── */
+  .step {
+    width: 100%;
+    max-width: 860px;
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(15, 40, 65, 0.08), 0 1px 4px rgba(15, 40, 65, 0.04);
+  }
+  .step-header {
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 700;
+    font-size: 15px;
+    color: #fff;
+    letter-spacing: 0.3px;
+  }
+  .step-num {
+    background: rgba(255,255,255,0.25);
+    border-radius: 8px;
+    width: 32px; height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+  .step-body {
+    background: #fff;
+    padding: 16px 20px;
+    font-size: 13.5px;
+    line-height: 1.65;
+  }
+  .step-body .explain {
+    background: #f7fafc;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 8px 0;
+    font-size: 13px;
+    color: #3a5a70;
+    border-left: 3px solid #94afc4;
+  }
+
+  /* Color themes per phase */
+  .phase-input .step-header    { background: linear-gradient(135deg, #2d6a8a, #1e4d6e); }
+  .phase-classify .step-header { background: linear-gradient(135deg, #3a7ca5, #2a6b91); }
+  .phase-istisna .step-header  { background: linear-gradient(135deg, #c07030, #a85e28); }
+  .phase-preproc .step-header  { background: linear-gradient(135deg, #3e7f5e, #2d6b4a); }
+  .phase-source .step-header   { background: linear-gradient(135deg, #5a6dad, #4a5c95); }
+  .phase-boot .step-header     { background: linear-gradient(135deg, #8b5ea0, #724d8a); }
+  .phase-gate .step-header     { background: linear-gradient(135deg, #bf4a4a, #a03838); }
+  .phase-lz .step-header       { background: linear-gradient(135deg, #2a5f8f, #1d4a72); }
+  .phase-norm .step-header     { background: linear-gradient(135deg, #1a6b5a, #145548); }
+  .phase-valid .step-header    { background: linear-gradient(135deg, #6b6b6b, #4a4a4a); }
+
+  /* Sub-items */
+  .sub-steps {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .sub-step {
+    background: #f4f8fb;
+    border: 1px solid #dce6ee;
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12.5px;
+    line-height: 1.55;
+  }
+  .sub-step.full { grid-column: 1 / -1; }
+  .sub-step-label {
+    font-weight: 700;
+    color: #1a3a55;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+  }
+
+  /* Formula blocks */
+  .formula {
+    background: #f0f5fa;
+    border: 1px solid #c8d8e8;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 10px 0;
+    font-family: 'Georgia', 'Courier New', monospace;
+    font-size: 15px;
+    text-align: center;
+    color: #1a3050;
+    letter-spacing: 0.3px;
+  }
+
+  /* Decision diamond */
+  .decision {
+    background: #fff8f0;
+    border: 2px solid #e8a050;
+    border-radius: 10px;
+    padding: 14px 20px;
+    margin: 8px 0;
+    text-align: center;
+    font-weight: 600;
+    font-size: 13.5px;
+    color: #7a4a10;
+  }
+  .decision-result {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .decision-yes, .decision-no {
+    padding: 4px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .decision-yes { background: #e6f5ee; color: #1f7a4d; }
+  .decision-no  { background: #fde8ea; color: #c62828; }
+
+  /* Tags */
+  .tag-fix {
+    display: inline-block;
+    background: #e6f9ed;
+    color: #1a7a3d;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: 6px;
+  }
+  .tag-warn {
+    display: inline-block;
+    background: #fff4de;
+    color: #a46013;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: 6px;
+  }
+  .tag-new {
+    display: inline-block;
+    background: #e0e8ff;
+    color: #3a50a0;
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: 6px;
+  }
+
+  /* Legend */
+  .legend {
+    max-width: 860px;
+    margin: 32px auto 0;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+    font-size: 12px;
+    color: #5b7a93;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend-dot {
+    width: 12px; height: 12px;
+    border-radius: 3px;
+  }
+
+  .ref {
+    max-width: 860px;
+    margin: 20px auto 0;
+    text-align: center;
+    font-size: 11.5px;
+    color: #8aa0b0;
+    line-height: 1.6;
+  }
+
+  /* ── Interpretation table ── */
+  .interp-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  .interp-table th {
+    background: #2d6a8a;
+    color: #fff;
+    padding: 8px 14px;
+    text-align: left;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .interp-table td {
+    padding: 8px 14px;
+    border-bottom: 1px solid #e0eaf4;
+  }
+  .interp-table tr:nth-child(even) td { background: #f7fafc; }
+  .pci-high   { color: #1a7a3d; font-weight: 700; }
+  .pci-mid    { color: #b08020; font-weight: 700; }
+  .pci-low    { color: #c62828; font-weight: 700; }
+
+  /* ── File tree ── */
+  .file-tree {
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    background: #1e2a3a;
+    color: #b0c8d8;
+    border-radius: 10px;
+    padding: 16px 20px;
+    line-height: 1.7;
+    margin: 10px 0;
+  }
+  .file-tree .dir  { color: #6db3f2; font-weight: 700; }
+  .file-tree .file { color: #c8d8e8; }
+  .file-tree .desc { color: #6a8a9a; font-style: italic; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!--  HEADER                                                            -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div class="page-header">
+  <div class="page-title">Perturbational Complexity Index (PCI) Calculator</div>
+  <div class="page-subtitle">A TMS-EEG analysis tool implementing Casali et al. (2013) with corrections and improvements</div>
+  <div class="page-meta">
+    <span>Python 3 + MNE-Python</span>
+    <span>Streamlit Web UI</span>
+    <span>41 Unit Tests</span>
+    <span>February 2026</span>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!--  SECTION 1: WHAT IS PCI?                                          -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">
+    <div class="icon" style="background: #2d6a8a;">?</div>
+    What Is PCI?
+  </div>
+
+  <div class="info-card wide" style="margin-bottom: 16px;">
+    <h3>The Scientific Question</h3>
+    <p>
+      Can we objectively measure the level of consciousness in a person who cannot communicate?
+      Patients under anaesthesia, in coma, vegetative state, or minimally conscious state cannot report
+      their subjective experience. The <strong>Perturbational Complexity Index (PCI)</strong> provides a
+      theory-grounded, single-number measure that quantifies how complex the brain's response is to a
+      direct electromagnetic perturbation, without requiring any behavioural cooperation.
+    </p>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-card">
+      <h3>The Idea</h3>
+      <p>
+        Consciousness requires the brain to be both <strong>integrated</strong> (parts talk to each other)
+        and <strong>differentiated</strong> (each part does something unique). PCI captures both by
+        perturbing the cortex with TMS (Transcranial Magnetic Stimulation) and measuring how complex
+        the resulting spatiotemporal EEG pattern is using Lempel-Ziv compression.
+      </p>
+    </div>
+    <div class="info-card">
+      <h3>What TMS-EEG Is</h3>
+      <p>
+        A TMS coil delivers a brief magnetic pulse to the cortex, triggering a cascade of neural
+        activation. High-density EEG (32-256 channels) records the brain's response over ~350 ms.
+        This combined TMS-EEG protocol captures how the perturbation propagates through cortical networks.
+      </p>
+    </div>
+    <div class="info-card">
+      <h3>Clinical Significance</h3>
+      <p>
+        PCI correctly classified consciousness levels in 100% of healthy awake subjects and distinguished
+        conscious from unconscious states across diverse conditions: NREM sleep, anaesthesia (midazolam,
+        propofol, xenon), locked-in syndrome, vegetative state, and minimally conscious state
+        (Casali et al. 2013).
+      </p>
+    </div>
+    <div class="info-card">
+      <h3>Interpretation Thresholds</h3>
+      <table class="interp-table">
+        <tr><th>PCI Range</th><th>Interpretation</th></tr>
+        <tr><td class="pci-high">&gt; 0.44</td><td>Conscious (wakefulness / dreaming / locked-in)</td></tr>
+        <tr><td class="pci-mid">0.31 &ndash; 0.44</td><td>Intermediate (minimally conscious state)</td></tr>
+        <tr><td class="pci-low">&lt; 0.31</td><td>Unconscious (deep sleep / anaesthesia / VS/UWS)</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="equation-block">
+    <div style="font-size: 12px; color: #7a95ab; margin-bottom: 4px;">Central Equation (Casali et al. 2013, Eq. 2)</div>
+    <div class="eq">PCI = c<sub>L</sub> &times; log<sub>2</sub>(L) &frasl; [ L &times; H(L) ]</div>
+    <div class="eq-label">where H(L) = &minus;p<sub>1</sub> log<sub>2</sub> p<sub>1</sub> &minus; (1 &minus; p<sub>1</sub>) log<sub>2</sub>(1 &minus; p<sub>1</sub>)</div>
+    <dl class="eq-desc" style="margin-top: 12px;">
+      <dt>c<sub>L</sub></dt><dd>Lempel-Ziv complexity of the binary significance matrix SS(x,t)</dd>
+      <dt>L</dt><dd>Total spatiotemporal samples = n_sources &times; n_post_times</dd>
+      <dt>H(L)</dt><dd>Source entropy of SS &mdash; binary Shannon entropy of the fraction of active samples</dd>
+      <dt>p<sub>1</sub></dt><dd>Fraction of "1" entries in SS(x,t)</dd>
+    </dl>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!--  SECTION 2: PROJECT OVERVIEW                                       -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">
+    <div class="icon" style="background: #3e7f5e;">P</div>
+    Project Overview
+  </div>
+
+  <div class="info-grid">
+    <div class="info-card accent-green">
+      <h3>What This Software Does</h3>
+      <p>
+        This project is a complete, end-to-end implementation of the PCI algorithm. Starting from raw
+        BrainVision TMS-EEG recordings, it performs the full processing pipeline: artifact removal,
+        filtering, epoching, source estimation, bootstrap statistics, Lempel-Ziv compression, and
+        normalization, then presents results through an interactive Streamlit web interface with
+        quality assessment and diagnostic visualizations.
+      </p>
+    </div>
+    <div class="info-card accent-purple">
+      <h3>Key Features</h3>
+      <ul>
+        <li>Automated trigger classification (TMS / Response / Annotation)</li>
+        <li><strong>Istisna mode</strong>: exception handling for mislabeled TTL markers</li>
+        <li>CSD (Current Source Density) or sensor-level analysis</li>
+        <li>Correlated bootstrap with Global Maximum Statistics</li>
+        <li>Dead channel auto-exclusion</li>
+        <li>Temporal PCI evolution PCI(t)</li>
+        <li>Comprehensive quality assessment with physiological range checks</li>
+      </ul>
+    </div>
+    <div class="info-card wide accent-orange">
+      <h3>Project Structure</h3>
+      <div class="file-tree">
+<span class="dir">pci_implementation/</span>
+  <span class="file">pci.py</span>           <span class="desc">-- Core algorithm (entropy, LZ76, bootstrap, PCI computation)</span>
+  <span class="file">app.py</span>           <span class="desc">-- Streamlit web UI (file upload, parameters, visualizations)</span>
+  <span class="dir">tests/</span>
+    <span class="file">test_pci.py</span>    <span class="desc">-- 41 unit tests (pytest) covering all algorithm components</span>
+  <span class="file">PCI_Algorithm_Flowchart.html</span>   <span class="desc">-- This document</span>
+  <span class="file">PCI_Supplementary_Material.pdf</span> <span class="desc">-- LaTeX supplementary material</span>
+  <span class="file">PCI_Review_Report.md</span>          <span class="desc">-- Detailed code review report</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!--  SECTION 3: HOW THE ALGORITHM WORKS (DETAILED)                     -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">
+    <div class="icon" style="background: #5a6dad;">A</div>
+    How the Algorithm Works &mdash; Step by Step
+  </div>
+  <p style="margin-bottom: 16px; color: #4a6a80; font-size: 14px;">
+    The flowchart below traces the complete processing pipeline from raw EEG data to the final PCI value.
+    Each step includes a plain-language explanation of <em>what</em> it does and <em>why</em> it matters.
+    Green <span class="tag-fix">FIXED</span> tags mark issues that were identified and corrected during code review.
+  </p>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!--  FLOWCHART                                                         -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div class="flowchart">
+
+  <!-- STEP 1 -->
+  <div class="step phase-input">
+    <div class="step-header"><span class="step-num">1</span>Load &amp; Parse Input</div>
+    <div class="step-body">
+      <strong>Input:</strong> BrainVision files (.vhdr + .vmrk + .eeg) &mdash; a standard format for TMS-EEG recordings.
+      <div class="explain">
+        <strong>What happens:</strong> The software reads the raw EEG recording using MNE-Python.
+        It extracts all event markers (annotations) embedded in the file. These markers indicate
+        when TMS pulses were delivered and when the subject pressed buttons. If hardware-level
+        stimulus channels exist (Stim_XX), those events are recovered as well.
+      </div>
+      <div class="sub-steps">
+        <div class="sub-step">
+          <div class="sub-step-label">MNE Loading</div>
+          <code>mne.io.read_raw_brainvision()</code><br>
+          Extracts events, event IDs, and metadata (sampling frequency, channel names, recording duration).
+        </div>
+        <div class="sub-step">
+          <div class="sub-step-label">Stim Channel Recovery</div>
+          <code>mne.find_events(stim_channel="auto")</code><br>
+          Recovers hardware-level Stim_XX events not present in annotations.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- STEP 2 -->
+  <div class="step phase-classify">
+    <div class="step-header"><span class="step-num">2</span>Trigger Classification</div>
+    <div class="step-body">
+      <div class="explain">
+        <strong>What happens:</strong> Each event marker from the recording is automatically classified
+        into a category based on its name and frequency. This is crucial because the software needs to
+        identify which events correspond to TMS pulses (the "perturbation") as opposed to button presses,
+        recording annotations, or other artifacts. The user selects from the classified triggers to specify
+        which event should be used as the TMS timing reference.
+      </div>
+      For each event marker, <code>classify_trigger(name, count)</code> assigns a category:
+      <div class="sub-steps">
+        <div class="sub-step"><div class="sub-step-label">TMS_LIKELY</div> Matches stimulation keywords ("S 1", "Stimulus/", "Stim_") AND count is in the typical 30-500 pulse range.</div>
+        <div class="sub-step"><div class="sub-step-label">TMS_POSSIBLE</div> Has stimulation keywords but an unusual count (&lt;30 or &gt;500), suggesting a non-standard protocol.</div>
+        <div class="sub-step"><div class="sub-step-label">RESPONSE</div> Matches response patterns ("Response", "button", "key", "R 1") &mdash; typically button presses.</div>
+        <div class="sub-step"><div class="sub-step-label">ANNOTATION / OTHER</div> Recording boundaries, comments, or unclassified events.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- STEP 2b -->
+  <div class="step phase-istisna">
+    <div class="step-header"><span class="step-num">2b</span>Istisna Mode &mdash; Exception Handling <span class="tag-fix">improved</span></div>
+    <div class="step-body">
+      <div class="explain">
+        <strong>What happens:</strong> In some TMS-EEG setups, the hardware TTL pulses from the TMS
+        stimulator are accidentally recorded as "Response" markers instead of "Stimulus" markers due to
+        port wiring. The <em>istisna</em> (Arabic for "exception") mode detects this situation by
+        analysing the temporal regularity of the response events. Real button presses are irregular;
+        TMS pulses are periodic. If a response-labeled train shows clock-like regularity, the user
+        is offered the option to reclassify it as TMS.
+      </div>
+      <strong>Only for RESPONSE markers.</strong> Detects mislabeled TTL pulses:
+      <div class="sub-steps">
+        <div class="sub-step full">
+          <div class="sub-step-label">Periodicity Detection Algorithm</div>
+          <code>detect_stimulation_like_response_train()</code><br>
+          1. Require at least 30 total events<br>
+          2. Split into temporal blocks by gaps &gt; 12 seconds<br>
+          3. For each block with at least 10 events:<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;a. Compute inter-stimulus intervals (ISI) in seconds<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;b. Check median ISI is in [0.2, 10] seconds (typical TMS rates)<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;c. Check coefficient of variation CV(ISI) &le; 0.05 (5% jitter tolerance) <span class="tag-fix">was 0.02</span><br>
+          4. If any block passes both criteria &rarr; <code>is_stimulation_like = True</code>
+        </div>
+      </div>
+      <div class="decision">
+        Is periodic AND user enables Istisna checkbox?
+        <div class="decision-result">
+          <span class="decision-yes">YES &rarr; Treat response markers as TMS triggers (optional per-block selection)</span>
+          <span class="decision-no">NO &rarr; Blocked from computation unless Expert Override is enabled</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- STEP 3 -->
+  <div class="step phase-preproc">
+    <div class="step-header"><span class="step-num">3</span>Preprocessing Pipeline</div>
+    <div class="step-body">
+      <div class="explain">
+        <strong>What happens:</strong> The raw EEG signal is cleaned and prepared for analysis.
+        TMS pulses create massive electromagnetic artifacts that must be removed. The signal is then
+        filtered to the relevant frequency band, downsampled to match the original paper's parameters,
+        and cut into short segments (epochs) centred on each TMS pulse. Noisy epochs are rejected.
+        Finally, the signal-to-noise ratio is computed as a data quality indicator.
+      </div>
+      <div class="sub-steps">
+        <div class="sub-step">
+          <div class="sub-step-label">3a. TMS Artifact Interpolation</div>
+          Linear interpolation over [&minus;2, +10] ms around each TMS pulse. Replaces the massive artifact
+          with a smooth ramp connecting the boundary samples.<br>
+          <code>validate_window_overlap()</code> warns if post-stimulus analysis starts before interpolation ends. <span class="tag-fix">new</span>
+        </div>
+        <div class="sub-step">
+          <div class="sub-step-label">3b. Bandpass Filter</div>
+          0.1&ndash;45 Hz zero-phase FIR filter (MNE default). Removes slow drifts and high-frequency noise
+          while preserving the cortical response band.
+        </div>
+        <div class="sub-step">
+          <div class="sub-step-label">3c. Resample</div>
+          Downsample to 362.5 Hz if original sampling rate &gt; 400 Hz. Matches the temporal resolution
+          used in Casali 2013 for cross-study comparability.
+        </div>
+        <div class="sub-step">
+          <div class="sub-step-label">3d. Epoch &amp; Reject</div>
+          Cut [&minus;500, +350] ms segments around each TMS pulse. Reject epochs where any channel
+          exceeds 150 &mu;V peak-to-peak (likely muscle/movement artifact).
+        </div>
+        <div class="sub-step full">
+          <div class="sub-step-label">3e. SNR Computation</div>
+          <div class="formula">SNR = mean|amplitude|<sub style="font-size:11px;">25&ndash;300 ms</sub> &frasl; mean(&sigma;<sub style="font-size:11px;">baseline</sub>)</div>
+          Sessions with SNR &lt; 1.4 were excluded by Casali et al. (2013). This threshold ensures the
+          TMS-evoked response is detectable above background noise.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- STEP 4 -->
+  <div class="step phase-source">
+    <div class="step-header"><span class="step-num">4</span>Source Estimation <span class="tag-warn">CSD &ne; inverse solution</span></div>
+    <div class="step-body">
+      <div class="explain">
+        <strong>What happens:</strong> Scalp EEG signals reflect the mixed activity of many cortical
+        sources. This step transforms the raw channel data into estimates of cortical current density,
+        improving spatial resolution. Our implementation offers two modes: (a) CSD (Current Source Density)
+        via the surface Laplacian, which is a spatial filter that sharpens the topography, or (b) direct
+        sensor-level analysis. The original paper used a full inverse-solution (3-sphere BERG model) with
+        ~5000 cortical dipoles, which is a more sophisticated approach.
+      </div>
+      <div class="sub-steps">
+        <div class="sub-step">
+          <div class="sub-step-label">CSD Transform (default)</div>
+          Surface Laplacian via <code>mne.preprocessing.compute_current_source_density()</code>.<br>
+          Produces 1 "source" per electrode channel (typically 32&ndash;256).
+        </div>
+        <div class="sub-step">
+          <div class="sub-step-label">Sensor-Level (fallback)</div>
+          Raw EEG channel voltages used directly as sources.<br>
+          Simpler but more affected by volume conduction.
+        </div>
+        <div class="sub-step full" style="background:#fff8f0; border-color:#e8c090;">
+          <div class="sub-step-label" style="color:#8a5020;">Important Caveat</div>
+          The published PCI thresholds (0.31 / 0.44) were calibrated using full inverse-solution source
+          reconstruction (~5000 dipoles), NOT CSD. Our CSD-based PCI values are <strong>not directly
+          comparable</strong> to these reference ranges. Casarotto et al. (2016) demonstrated that
+          sensor-level PCI retains discriminative power, but thresholds may need recalibration.
+          <span class="tag-warn">documented</span>
+        </div>
+      </div>
+      <div style="margin-top:8px; font-size:12.5px;">
+        <strong>Output:</strong> <code>source_data</code> &mdash; 3D array of shape (n_sources &times; n_times &times; n_trials)
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- STEP 5 -->
+  <div class="step phase-boot">
+    <div class="step-header"><span class="step-num">5</span>Bootstrap Significance Matrix <span class="tag-fix">critical fix applied</span></div>
+    <div class="step-body">
+      <div class="explain">
+        <strong>What happens:</strong> This is the statistical heart of the algorithm. It determines
+        <em>which</em> spatiotemporal points in the brain response are significantly different from
+        pre-stimulus baseline activity. For each source, the trial-averaged response is z-scored
+        against its baseline. A bootstrap procedure builds a null distribution by randomly resampling
+        baseline data, then sets a global threshold. Any z-score exceeding this threshold is marked as
+        significantly active, producing a binary matrix SS(x,t) of 0s and 1s.
+      </div>
+      <div class="sub-steps">
+        <div class="sub-step">
+          <div class="sub-step-label">5a. Trial-Average</div>
+          <code>evoked = mean(source_data, axis=trials)</code><br>
+          Average across all accepted epochs to extract the reproducible evoked response, suppressing
+          random noise. Output: (n_sources &times; n_times).
+        </div>
+        <div class="sub-step">
+          <div class="sub-step-label">5b. Z-Score per Source</div>
+          For each source: &mu; and &sigma; from baseline [&minus;500, &minus;1] ms (ddof=1).<br>
+          Dead channels (&sigma; &asymp; 0) are <strong>excluded entirely</strong> rather than floored.
+          <span class="tag-fix">fixed</span>
+        </div>
+        <div class="sub-step full">
+          <div class="sub-step-label">5c. Bootstrap Null Distribution &mdash; Global Maximum Statistics</div>
+          <strong>Spatially-correlated resampling</strong> (same time indices across ALL sources simultaneously)
+          <span class="tag-fix">critical fix</span><br>
+          <code style="display:block; margin:6px 0; padding:10px; background:#f0f0fa; border-radius:6px; font-size: 12.5px;">
+            for b in range(500):<br>
+            &nbsp;&nbsp;idx = random_time_indices(n_post)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# ONE set of indices<br>
+            &nbsp;&nbsp;sampled = z_baseline_alive[:, idx]&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# SAME indices for ALL sources<br>
+            &nbsp;&nbsp;null_maxima[b] = max(|sampled|)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# global max across sources &amp; times
+          </code>
+          <div style="margin-top:6px; font-size:12px; color: #5a5a7a;">
+            <strong>Why this matters:</strong> The previous code used <em>independent</em> random indices per source,
+            which broke the natural spatial correlation structure between brain regions. This produced a
+            <em>less conservative</em> (lower) threshold, admitting more false positives into SS.
+            The corrected version preserves cross-source correlations, matching the Global Maximum Statistics
+            framework (Nichols &amp; Holmes, 2002) used in neuroimaging.
+          </div>
+        </div>
+        <div class="sub-step">
+          <div class="sub-step-label">5d. Threshold</div>
+          &tau; = 99th percentile of null maxima<br>
+          (significance level &alpha; = 0.01)
+        </div>
+        <div class="sub-step">
+          <div class="sub-step-label">5e. Binary Matrix</div>
+          SS(x,t) = 1 if |z(x,t)| &gt; &tau;, else 0<br>
+          Excluded dead channels &rarr; all zeros automatically.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- STEP 6 -->
+  <div class="step phase-gate">
+    <div class="step-header"><span class="step-num">6</span>Quality Gates</div>
+    <div class="step-body">
+      <div class="explain">
+        <strong>What happens:</strong> Before computing PCI, the algorithm checks whether the binary
+        matrix contains enough information to produce a meaningful result. If the matrix is almost all
+        zeros (no significant response) or almost all ones (noise-dominated), the entropy is too low
+        and the Lempel-Ziv normalization becomes unstable. In these cases PCI is set to zero.
+      </div>
+      <div class="formula">
+        p<sub>1</sub> = &Sigma; SS / |SS| &nbsp;&nbsp;&nbsp;&nbsp; H(L) = &minus;p<sub>1</sub> log<sub>2</sub>(p<sub>1</sub>) &minus; (1 &minus; p<sub>1</sub>) log<sub>2</sub>(1 &minus; p<sub>1</sub>)
+      </div>
+      <div class="decision">
+        H &lt; 0.08 &nbsp;OR&nbsp; p<sub>1</sub> &lt; 0.01?
+        <div class="decision-result">
+          <span class="decision-no">YES &rarr; PCI = 0 (insufficient signal) &mdash; STOP</span>
+          <span class="decision-yes">NO &rarr; Continue to compression</span>
+        </div>
+      </div>
+      <div style="font-size:12px; color:#666; margin-top:6px;">
+        Same thresholds now used in both <code>compute_pci</code> and <code>compute_pci_temporal</code>.
+        <span class="tag-fix">harmonised</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- STEP 7 -->
+  <div class="step phase-lz">
+    <div class="step-header"><span class="step-num">7</span>Optimal Ordination &amp; Lempel-Ziv Compression</div>
+    <div class="step-body">
+      <div class="explain">
+        <strong>What happens:</strong> This is the core information-theoretic step. First, the rows (sources)
+        of the binary matrix are sorted by their total activation count, placing the most active sources
+        at the top. This "optimal ordination" minimises artefactual spatial complexity. Then the 2D matrix
+        is flattened into a 1D binary string and compressed using the Lempel-Ziv 1976 algorithm. The number
+        of distinct "words" found during parsing measures the sequence's algorithmic complexity &mdash; how
+        much novel information it contains. A highly complex (differentiated + integrated) brain response
+        produces many distinct words; a simple, repetitive pattern produces few.
+      </div>
+      <div class="sub-steps">
+        <div class="sub-step">
+          <div class="sub-step-label">7a. Source Sorting</div>
+          Sort rows by descending total activation with deterministic tie-breaking:<br>
+          <code>_sort_sources(SS)</code> uses primary key (total 1s) and secondary key (row content as binary number)
+          to ensure permutation-invariant ordering. <span class="tag-fix">fixed</span>
+        </div>
+        <div class="sub-step">
+          <div class="sub-step-label">7b. Column-Major Flatten</div>
+          Scan the matrix time-by-time (Casali convention):<br>
+          <code>flat = SS_sorted.flatten(order='F')</code><br>
+          This scans: [all_sources_at_t0, all_sources_at_t1, ...] &mdash; concatenating the full spatial vector at each timestep.
+        </div>
+        <div class="sub-step full">
+          <div class="sub-step-label">7c. LZ76 Exhaustive Parsing</div>
+          <code style="display:block; margin:6px 0; padding:10px; background:#f0f4fa; border-radius:6px; font-size: 12.5px;">
+            c = 1, &nbsp; i = 1 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style="color:#6a8a9a;"># first symbol is word #1</span><br>
+            while i &lt; len(sequence):<br>
+            &nbsp;&nbsp;find longest prefix s[i:i+k] that exists in history s[0:i]<br>
+            &nbsp;&nbsp;i += max_match + 1 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style="color:#6a8a9a;"># new word = match + 1 novel symbol</span><br>
+            &nbsp;&nbsp;c += 1<br>
+            return c &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style="color:#6a8a9a;"># = c<sub>L</sub> (spatial complexity count)</span>
+          </code>
+        </div>
+        <div class="sub-step full">
+          <div class="sub-step-label">7d. Temporal Variant (PCI<sup>T</sup>)</div>
+          The transposed matrix is also compressed: <code>c_L_T = LZ76(SS_sorted.T.flatten('F'))</code>.
+          This scans source-by-source (each source's full time series concatenated), capturing <em>temporal</em>
+          complexity as complementary information to the spatial variant.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- STEP 8 -->
+  <div class="step phase-norm">
+    <div class="step-header"><span class="step-num">8</span>Normalisation &rarr; PCI</div>
+    <div class="step-body">
+      <div class="explain">
+        <strong>What happens:</strong> The raw LZ complexity count depends on the matrix size and the
+        fraction of 1s, making it hard to compare across recordings with different numbers of channels
+        or time points. The normalisation divides by the theoretical asymptotic LZ complexity of a
+        random binary sequence with the same entropy &mdash; the maximum complexity a random matrix of
+        that size and density could achieve. This produces PCI, a dimensionless index between 0 and ~1
+        that is comparable across subjects, sessions, and recording setups.
+      </div>
+      <div class="formula" style="font-size:18px;">
+        PCI = c<sub>L</sub> &times; log<sub>2</sub>(L) &frasl; [ L &times; H(L) ]
+      </div>
+      <div class="sub-steps">
+        <div class="sub-step">
+          <div class="sub-step-label">Parameters</div>
+          L = n_sources &times; n_post_times<br>
+          H(L) = source entropy of SS<br>
+          Normaliser = L &times; H &frasl; log<sub>2</sub>(L)<br>
+          <span style="font-size:11.5px; color:#666;">(the asymptotic c<sub>L</sub> of a random binary string with the same p<sub>1</sub>)</span>
+        </div>
+        <div class="sub-step">
+          <div class="sub-step-label">Clinical Interpretation</div>
+          <table class="interp-table">
+            <tr><th>PCI Value</th><th>Clinical State</th></tr>
+            <tr><td class="pci-high">&ge; 0.44</td><td>Conscious (awake, dreaming, locked-in)</td></tr>
+            <tr><td class="pci-mid">0.31 &ndash; 0.44</td><td>Minimally conscious state (MCS)</td></tr>
+            <tr><td class="pci-low">&lt; 0.31</td><td>Unconscious (VS/UWS, deep sleep, anaesthesia)</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow"></div>
+
+  <!-- STEP 9 -->
+  <div class="step phase-valid">
+    <div class="step-header"><span class="step-num">9</span>Validation &amp; Quality Report</div>
+    <div class="step-body">
+      <div class="explain">
+        <strong>What happens:</strong> The final step runs a battery of automated quality checks comparing
+        the results against expected physiological ranges from published literature. This helps the user
+        identify potential problems: wrong trigger selection, noisy data, processing artifacts, or
+        unexpected parameter combinations. Each check returns PASS / WARN / FAIL with an explanation.
+      </div>
+      <div class="sub-steps">
+        <div class="sub-step">
+          <div class="sub-step-label">Physiological Range Checks</div>
+          Active % &isin; [4, 15] &rarr; PASS<br>
+          Entropy H &isin; [0.15, 0.60] &rarr; PASS<br>
+          Threshold &tau; &isin; [3.0, 6.0] &rarr; PASS<br>
+          SNR &ge; 1.4 &rarr; PASS<br>
+          PCI &le; 1.10 &rarr; PASS
+        </div>
+        <div class="sub-step">
+          <div class="sub-step-label">Additional Diagnostics</div>
+          CSD vs source reconstruction warning <span class="tag-warn">documented</span><br>
+          Dead channel count and exclusion info <span class="tag-fix">new</span><br>
+          Istisna mode usage flag<br>
+          Trigger selection anomaly detection<br>
+          Window overlap warnings <span class="tag-fix">new</span>
+        </div>
+        <div class="sub-step full">
+          <div class="sub-step-label">Output Visualizations</div>
+          <strong>(a)</strong> Butterfly plot + GFP (Global Field Power) of evoked response &nbsp;|&nbsp;
+          <strong>(b)</strong> SS matrix heatmap (binary significance matrix) &nbsp;|&nbsp;
+          <strong>(c)</strong> PCI(t) temporal evolution curve showing complexity build-up over time
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<!--  SECTION 4: CORRECTIONS SUMMARY                                    -->
+<!-- ════════════════════════════════════════════════════════════════════ -->
+<div class="section" style="margin-top: 36px;">
+  <div class="section-title">
+    <div class="icon" style="background: #1a7a3d;">&#10003;</div>
+    Corrections &amp; Improvements Applied
+  </div>
+
+  <div class="info-grid">
+    <div class="info-card accent-red">
+      <h3>Critical Fixes</h3>
+      <ul>
+        <li><strong>Bootstrap resampling</strong>: Changed from independent per-source indices to correlated
+            resampling (same time indices across all sources), preserving spatial correlations per Global
+            Maximum Statistics (Nichols &amp; Holmes, 2002).</li>
+        <li><strong>Dead channel handling</strong>: Replaced sigma flooring with explicit exclusion of
+            zero-variance sources, preventing inflated z-scores from flat electrodes.</li>
+        <li><strong>Source sorting</strong>: Added deterministic tie-breaking using row content as binary
+            number, ensuring permutation-invariant results.</li>
+      </ul>
+    </div>
+    <div class="info-card accent-orange">
+      <h3>Moderate Fixes</h3>
+      <ul>
+        <li><strong>Window overlap validation</strong>: New warning when TMS artifact interpolation overlaps
+            the post-stimulus analysis window.</li>
+        <li><strong>Quality threshold harmonization</strong>: <code>compute_pci_temporal</code> now uses same
+            min_entropy=0.08, min_p1=0.01 as <code>compute_pci</code>.</li>
+        <li><strong>CSD documentation</strong>: Added prominent warnings that CSD &ne; inverse solution and
+            published thresholds may not apply.</li>
+        <li><strong>Istisna CV threshold</strong>: Raised from 0.02 to 0.05 to accommodate jitter from
+            manual TMS triggering.</li>
+        <li><strong>Configurable random seed</strong>: Bootstrap accepts <code>seed=</code> parameter.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#1e4d6e;"></div> Input / Classification</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#a85e28;"></div> Istisna Exception</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#2d6b4a;"></div> Preprocessing</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#4a5c95;"></div> Source Estimation</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#724d8a;"></div> Bootstrap Statistics</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#a03838;"></div> Quality Gate</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#1d4a72;"></div> LZ Compression</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#145548;"></div> Normalisation</div>
+  <span class="tag-fix" style="margin-left:16px;">FIXED</span> = corrected in this update
+  <span class="tag-warn" style="margin-left:8px;">WARNING</span> = important caveat
+</div>
+
+<div class="ref">
+  <strong>References:</strong><br>
+  Casali AG et al. (2013) <em>Sci. Transl. Med.</em> <strong>5</strong>, 198ra105 &nbsp;|&nbsp;
+  Comolatti R et al. (2019) <em>Brain Stimulation</em> <strong>12</strong>(5), 1280&ndash;1289 &nbsp;|&nbsp;
+  Casarotto S et al. (2016) <em>Ann Neurol</em> <strong>80</strong>(5), 718&ndash;729 &nbsp;|&nbsp;
+  Nichols TE &amp; Holmes AP (2002) <em>Hum Brain Mapp</em> <strong>15</strong>(1), 1&ndash;25
+</div>
+
+</body>
+</html>

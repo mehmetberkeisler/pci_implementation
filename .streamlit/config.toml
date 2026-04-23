@@ -1,0 +1,13 @@
+# Streamlit Configuration — PCI Calculator
+
+[server]
+maxUploadSize = 2048
+fileWatcherType = "auto"
+enableXsrfProtection = true
+
+[theme]
+primaryColor = "#000000"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FAFAFA"
+textColor = "#1A1A1A"
+font = "serif"
