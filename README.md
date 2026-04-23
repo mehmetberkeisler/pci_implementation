@@ -1,46 +1,123 @@
 # TMS-EEG PCIst Workbench
 
-Streamlit and CLI tools for multi-session TMS-EEG PCIst analysis from BrainVision files.
-The active pipeline estimates sensor-level PCIst following the state-transition approach of Comolatti et al. (2019), with explicit quality-control warnings for triggers, epochs, SNR, and bad channels.
+A Streamlit web app for multi-session TMS-EEG analysis using the **PCIst** (Perturbational Complexity Index based on State Transitions) method from Comolatti et al. (2019).
 
-## Quick Start
+Upload a BrainVision recording (`.vhdr` + `.vmrk` + `.eeg`). The app auto-detects stimulation sessions, runs the full preprocessing pipeline, and reports per-session PCIst with quality-control indicators.
+
+---
+
+## Requirements
+
+- Python **3.9 or later**
+- ~500 MB disk space for dependencies
+- Your BrainVision EEG files (`.vhdr`, `.vmrk`, `.eeg`)
+
+---
+
+## Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/mehmetberkeisler/pci_implementation.git
+cd pci_implementation
+```
+
+### 2. Create a virtual environment (recommended)
+
+```bash
+python3 -m venv venv
+source venv/bin/activate      # macOS / Linux
+# venv\Scripts\activate       # Windows
+```
+
+### 3. Install dependencies
 
 ```bash
 pip install -r requirements.txt
-python3 -m streamlit run app.py --server.port 8501 --server.address localhost
 ```
 
-Open `http://localhost:8501` and upload the matching `.vhdr`, `.vmrk`, and `.eeg` files.
+---
 
-## CLI
+## Running the App
 
 ```bash
-python3 analyze_pci.py /path/to/file.vhdr --gap-seconds 60 --pcist-n-steps 100
+streamlit run app.py --server.port 8501 --server.address localhost
 ```
 
-The repository also contains `pci.py`, a legacy LZ-PCI implementation retained for reference and tests. The Streamlit multi-session workflow uses `analyze_pci.py` and PCIst, not the legacy Casali-style LZ-PCI path.
+Then open your browser and go to:
 
-## Active Method
+```
+http://localhost:8501
+```
 
-1. Load BrainVision header, marker, and EEG data.
-2. Detect stimulation sessions from periodic marker trains.
-3. Accept Response markers as stimulus proxies only when they form a periodic stimulation-like train.
-4. Interpolate the TMS artifact window.
-5. Downsample to the target processing rate, default 1000 Hz.
-6. Remove bad channels, then apply common average reference.
-7. Bandpass filter 0.1 to 45 Hz.
-8. Extract and reject epochs.
-9. Average accepted epochs to an evoked response.
-10. Compute PCIst with SVD dimensionality reduction and normalized recurrence-matrix state transitions.
+---
 
-## PCIst Interpretation
+## How to Use
 
-PCIst is not the same scale as original Casali 2013 LZ-PCI. Original PCI is a normalized Lempel-Ziv complexity measure on source-reconstructed cortical activation matrices, which is why published values are often discussed near 0 to 1 and why thresholds such as 0.31 or 0.44 appear in that literature.
+1. **Upload your recording** — drag and drop all three BrainVision files (`.vhdr`, `.vmrk`, `.eeg`) into the sidebar uploader at the same time.
+2. **Check the preview** — the sidebar instantly shows channel count, sampling rate, duration, and auto-detected sessions.
+3. **Adjust parameters** (optional) — expand "Advanced (Comolatti defaults)" in the sidebar to tune epoch rejection threshold, artifact window, target sampling rate, PCIst `k`, etc.
+4. **Run analysis** — click the **Run analysis** button in the Analyse tab.
+5. **View results** — per-session PCIst values are shown alongside SNR, epoch counts, bad channels, and QC warnings. Plots include the evoked response, GFP, and PCIst component breakdown.
 
-The active app reports sensor-level PCIst. PCIst sums positive normalized state-transition differences across retained SVD components after multiplying each component contribution by the response-window length. Therefore PCIst is not bounded to 0-1, and the value depends on preprocessing, sampling rate, response window, SVD component selection, SNR filtering, and the threshold scan. Use it mainly for within-study and within-pipeline comparisons unless you have an independently validated threshold for the exact acquisition and processing pipeline.
+---
+
+## Project Structure
+
+```
+pci_implementation/
+├── app.py                     # Streamlit entry point
+├── analyze_pci.py             # Full analysis pipeline (BrainVision loader, preprocessing, epoching)
+├── pcist.py                   # Adapter around the vendored PCIst reference
+├── requirements.txt           # Python dependencies
+├── ui/                        # Streamlit UI components
+│   ├── sidebar.py             # File upload + parameter controls
+│   ├── analyze_tab.py         # Run button + progress display
+│   ├── results.py             # Per-session result cards
+│   ├── plots.py               # Evoked / GFP / PCIst plots
+│   ├── about.py               # About tab content
+│   ├── state.py               # Session state initialisation
+│   └── theme.py               # CSS injection + matplotlib defaults
+├── third_party/pcist_ref/     # Vendored Comolatti 2019 reference implementation (GPL-3.0)
+└── tests/                     # Pytest test suite
+```
+
+---
+
+## Pipeline Steps
+
+1. Load BrainVision header, marker, and binary EEG data.
+2. Auto-detect stimulation sessions from inter-stimulus timing gaps.
+3. Accept Response markers as TMS triggers when they form a periodic train (common in BrainVision setups).
+4. Interpolate the TMS artifact window (default −2 to +10 ms, cubic spline).
+5. Downsample to target processing rate (default 1000 Hz).
+6. Detect and exclude bad channels, then apply common average reference (CAR).
+7. Bandpass filter 0.1–45 Hz (zero-phase FFT).
+8. Extract epochs (default −500 to +350 ms), reject by peak-to-peak amplitude.
+9. Average accepted epochs into an evoked response.
+10. Compute PCIst via SVD dimensionality reduction + normalized state-transition recurrence matrix.
+
+---
+
+## Running Tests
+
+```bash
+pytest tests/
+```
+
+---
+
+## PCIst vs Original PCI — Important Note
+
+This app reports **sensor-level PCIst**, which is **not** the same scale as the original source-space LZ-PCI (Casali 2013). PCIst values are not bounded to [0, 1] and depend on preprocessing settings, sampling rate, and SVD component selection. Use PCIst values for **within-study comparisons** rather than direct comparison against published LZ-PCI thresholds (e.g., 0.31).
+
+---
 
 ## References
 
-- Casali AG et al. (2013). A theoretically based index of consciousness independent of sensory processing and behavior. Science Translational Medicine.
-- Comolatti R et al. (2019). A fast and general method to empirically estimate the complexity of brain responses to transcranial and intracranial stimulations. Brain Stimulation.
-- Rogasch NC et al. (2017). TESA: An open-source toolbox for analyzing TMS-EEG data. NeuroImage.
+- Comolatti R et al. (2019). A fast and general method to empirically estimate the complexity of brain responses to transcranial and intracranial stimulations. *Brain Stimulation*, 12(5):1280–1289.
+- Casali AG et al. (2013). A theoretically based index of consciousness independent of sensory processing and behavior. *Science Translational Medicine*.
+- Rogasch NC et al. (2017). TESA: An open-source toolbox for analyzing TMS-EEG data. *NeuroImage*.
+
+The PCIst math is the **unmodified** authors' reference implementation vendored under `third_party/pcist_ref/` ([renzocom/PCIst](https://github.com/renzocom/PCIst), GPL-3.0).
