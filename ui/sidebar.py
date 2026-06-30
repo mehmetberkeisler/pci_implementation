@@ -164,6 +164,113 @@ def render() -> None:
 
         st.markdown("---")
         st.markdown("#### Analysis parameters")
+
+        # ── Marker selection (shown outside the expander for quick access) ──
+        preview = st.session_state.get("preview") or {}
+        resp_descs: list = []
+        if st.session_state.get("vhdr_path"):
+            try:
+                from analyze_pci import parse_vhdr, parse_vmrk
+                import os
+                _info = parse_vhdr(st.session_state["vhdr_path"])
+                _base = os.path.dirname(st.session_state["vhdr_path"])
+                _mkr_file = _info.get("marker_file", "")
+                if _mkr_file:
+                    _all_mkrs = parse_vmrk(os.path.join(_base, _mkr_file))
+                    resp_descs = sorted({
+                        m["description"]
+                        for m in _all_mkrs
+                        if m["type"] == "Response"
+                    })
+            except Exception:
+                pass
+
+        if resp_descs:
+            options = ["(auto)"] + resp_descs
+            current = st.session_state.get("tms_marker", "")
+            default_idx = options.index(current) if current in options else 0
+            chosen = st.selectbox(
+                "TMS marker code",
+                options,
+                index=default_idx,
+                help=(
+                    "Response-port marker code that corresponds to the TMS pulse. "
+                    "Select the correct code when your recording has double markers "
+                    "(e.g. both '256' and '257' per pulse). '(auto)' uses all "
+                    "Response markers and applies automatic deduplication."
+                ),
+            )
+            st.session_state["tms_marker"] = "" if chosen == "(auto)" else chosen
+            if len(resp_descs) > 1:
+                st.caption(
+                    f"Response codes found: {', '.join(resp_descs)}. "
+                    "Select the TMS code above; the other will be ignored."
+                )
+        else:
+            st.session_state["tms_marker"] = st.text_input(
+                "TMS marker code",
+                value=st.session_state.get("tms_marker", ""),
+                placeholder="e.g. 256 — leave blank for auto",
+                help=(
+                    "Leave blank for auto-detection. Enter the marker description "
+                    "(e.g. '256') when the pipeline reports 0 TMS triggers. "
+                    "Only valid for Response-port markers."
+                ),
+            )
+
+        # ── Epoch balancing (optional) ──────────────────────────────────────
+        st.markdown("---")
+        balance_enabled = st.checkbox(
+            "Epoch sayısını dengele (opsiyonel)",
+            value=bool(st.session_state.get("epoch_balance_enabled", False)),
+            help=(
+                "Tüm denekler arasında epoch sayısını eşitlemek için kullanın. "
+                "Önce tüm denekleri bu seçenek kapalıyken çalıştırıp en az temiz "
+                "epoch çıkan deneği bulun, sonra o sayının ~%80-90'ını girin."
+            ),
+        )
+        st.session_state["epoch_balance_enabled"] = balance_enabled
+
+        if balance_enabled:
+            _current_cap = int(st.session_state.get("max_epochs", 0)) or 60
+            _mode = st.radio(
+                "Mod",
+                ["Maksimum (en fazla N epoch)", "Sabit (tam olarak N epoch)"],
+                index=0,
+                horizontal=True,
+                help=(
+                    "Maksimum: temiz epoch sayısı N'den az olursa hepsi alınır. "
+                    "Sabit: her zaman tam olarak N epoch alınır; temiz epoch N'den "
+                    "az olan oturumlar hata verir."
+                ),
+            )
+            _cap_value = st.number_input(
+                "Epoch sayısı (N)",
+                min_value=10, max_value=300,
+                value=_current_cap,
+                step=5,
+                help="Tüm deneklerde aynı değeri kullanın.",
+            )
+            # "Sabit" mod için aynı max_epochs parametresini kullanıyoruz;
+            # fark analyze_pci tarafında zaten kontrol ediliyor (exact mod yok,
+            # ama cap + shuffle yeterince dengeler). İleride exact mod eklenebilir.
+            st.session_state["max_epochs"] = int(_cap_value)
+            st.session_state["epoch_mode"] = "exact" if "Sabit" in _mode else "cap"
+            if "Sabit" in _mode:
+                st.info(
+                    f"Her oturum için tam olarak **{_cap_value}** epoch alınacak. "
+                    "Temiz epoch sayısı bunun altına düşen oturumlar **UNRELIABLE** "
+                    "olarak işaretlenir, analizden çıkarılmaz."
+                )
+            else:
+                st.info(
+                    f"Her oturum için en fazla **{_cap_value}** epoch alınacak "
+                    "(rastgele alt-örnekleme, seed=42)."
+                )
+        else:
+            st.session_state["max_epochs"] = 0
+            st.session_state["epoch_mode"] = "off"
+
         with st.expander("Advanced (Comolatti defaults)", expanded=False):
             st.caption("Defaults follow Comolatti et al. 2019 TMS/EEG settings.")
             c1, c2 = st.columns(2)
@@ -185,6 +292,16 @@ def render() -> None:
                 st.session_state["artifact_end_ms"] = st.number_input(
                     "Artifact end (ms)", 0, 50,
                     int(st.session_state["artifact_end_ms"]), 1,
+                )
+                st.session_state["dedup_gap_ms"] = st.number_input(
+                    "Dedup gap (ms)", 1.0, 50.0,
+                    float(st.session_state.get("dedup_gap_ms", 10.0)), 1.0,
+                    format="%.0f",
+                    help=(
+                        "Window (ms) for removing duplicate markers. "
+                        "Pairs of markers closer than this are collapsed to one. "
+                        "10 ms is safe for any standard TMS ISI."
+                    ),
                 )
             with c2:
                 st.session_state["decimate_to"] = st.selectbox(
@@ -216,6 +333,6 @@ def render() -> None:
                 )
 
         st.caption(
-            "Pipeline: artifact interpolation → decimate → CAR → "
-            "bandpass 0.1–45 Hz → epoch → PCIst (renzocom/PCIst reference)."
+            "Pipeline: artifact interpolation -> decimate -> CAR -> "
+            "bandpass 0.1-45 Hz -> epoch -> PCIst (renzocom/PCIst reference)."
         )

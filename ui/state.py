@@ -28,6 +28,12 @@ DEFAULTS = {
     "pcist_max_var": 99.0,
     "pcist_n_steps": 100,
     "min_snr_gate": 1.4,
+    # Marker selection (new data: Response port markers 256/257)
+    "tms_marker": "",          # e.g. "256"; empty = auto-detect
+    "dedup_gap_ms": 10.0,      # strip duplicate markers within this window
+    # Epoch balancing
+    "epoch_balance_enabled": False,   # toggle for the epoch cap section
+    "max_epochs": 0,                  # 0 = disabled; e.g. 60 to cap all subjects at 60
     # Result
     "result": None,             # dict from analyze_pci.analyze_file | None
 }

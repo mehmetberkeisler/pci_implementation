@@ -79,6 +79,9 @@ def _run_analysis() -> None:
     ss = st.session_state
     with st.spinner("Running PCIst pipeline — this takes ~30 s per session…"):
         try:
+            _tms_marker = (ss.get("tms_marker") or "").strip() or None
+            _max_epochs = int(ss.get("max_epochs", 0)) or None
+            _epoch_mode = ss.get("epoch_mode", "off")  # "off" | "cap" | "exact"
             result = analyze_file(
                 ss["vhdr_path"],
                 gap_seconds=float(ss["gap_seconds"]),
@@ -87,6 +90,10 @@ def _run_analysis() -> None:
                                     int(ss["artifact_end_ms"])),
                 decimate_to=float(ss["decimate_to"]),
                 min_snr=float(ss["min_snr_gate"]),
+                tms_marker=_tms_marker,
+                max_epochs=_max_epochs,
+                exact_epochs=(_epoch_mode == "exact"),
+                dedup_gap_ms=float(ss.get("dedup_gap_ms", 10.0)),
                 pcist_baseline_window=(-0.400, -0.050),
                 pcist_response_window=(0.0, 0.300),
                 pcist_k=float(ss["pcist_k"]),

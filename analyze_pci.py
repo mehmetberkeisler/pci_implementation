@@ -365,11 +365,27 @@ def extract_epochs(
     tmin: float = -0.5,
     tmax: float = 0.35,
     reject_uv: float = 150.0,
+    max_epochs: Optional[int] = None,
+    random_seed: int = 42,
 ) -> Tuple[np.ndarray, np.ndarray, int, int]:
-    """
-    Extract epochs around stimulus positions.
-    Returns: (epochs, times, n_accepted, n_rejected)
-    epochs shape: (n_ch, n_times, n_epochs)
+    """Extract epochs around stimulus positions.
+
+    Parameters
+    ----------
+    max_epochs : int or None
+        If set, randomly subsample accepted epochs to this number after
+        artifact rejection. Use the same value across all subjects to
+        keep epoch counts balanced (recommended: minimum clean count
+        across the cohort, or a fixed target such as 60).
+    random_seed : int
+        Seed for the random subsampler so results are reproducible.
+
+    Returns
+    -------
+    epochs : ndarray, shape (n_ch, n_times, n_epochs)
+    times  : ndarray, shape (n_times,)
+    n_accepted : int   (before capping)
+    n_rejected : int
     """
     n_ch, n_samples = data.shape
     s_start = int(tmin * sfreq)
@@ -390,7 +406,7 @@ def extract_epochs(
 
         epoch = data[:, start:end]  # (n_ch, n_times)
 
-        # Artifact rejection: peak-to-peak
+        # Artifact rejection: peak-to-peak per channel
         pp = np.ptp(epoch, axis=1)  # (n_ch,)
         if np.any(pp > reject_uv):
             n_rejected += 1
@@ -401,8 +417,18 @@ def extract_epochs(
     if not epochs_list:
         return np.empty((n_ch, n_times, 0)), times, 0, n_rejected
 
+    n_accepted = len(epochs_list)
+
+    # Optional epoch cap: subsample to max_epochs for cross-subject balance
+    if max_epochs is not None and 0 < max_epochs < n_accepted:
+        rng = np.random.default_rng(random_seed)
+        idx = rng.choice(n_accepted, size=max_epochs, replace=False)
+        idx.sort()
+        epochs_list = [epochs_list[i] for i in idx]
+        logger.info(f"  [EPOCHS] Subsampled {n_accepted} → {max_epochs} epochs (seed={random_seed})")
+
     epochs = np.stack(epochs_list, axis=2)  # (n_ch, n_times, n_epochs)
-    return epochs, times, len(epochs_list), n_rejected
+    return epochs, times, n_accepted, n_rejected
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -597,6 +623,39 @@ def detect_sessions(
 # §5 MAIN ANALYSIS PIPELINE
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _dedup_markers(positions: List[int], sfreq: float,
+                   min_gap_ms: float = 10.0) -> List[int]:
+    """Remove duplicate marker positions that are within min_gap_ms of each other.
+
+    BrainVision TMS setups sometimes fire two TTL pulses per stimulus (e.g.
+    codes 256 and 257 on the same port within a few samples). Keeping both
+    doubles the effective marker count and produces a bimodal ISI distribution
+    that fails the periodicity check. This function retains the *first* marker
+    in each cluster and discards the rest.
+
+    Parameters
+    ----------
+    positions  : list of sample indices (already 0-indexed, any order)
+    sfreq      : sampling frequency in Hz
+    min_gap_ms : markers separated by less than this are treated as duplicates
+    """
+    if len(positions) < 2:
+        return list(positions)
+    min_gap_samples = int(min_gap_ms * sfreq / 1000.0)
+    sorted_pos = sorted(positions)
+    kept = [sorted_pos[0]]
+    for p in sorted_pos[1:]:
+        if p - kept[-1] >= min_gap_samples:
+            kept.append(p)
+    n_removed = len(positions) - len(kept)
+    if n_removed:
+        logger.info(
+            f"  [DEDUP] Removed {n_removed} duplicate marker(s) within {min_gap_ms} ms "
+            f"({len(kept)} remaining)"
+        )
+    return kept
+
+
 def _detect_periodic_response_train(positions: List[int], sfreq: float,
                                      min_events: int = 20, max_cv: float = 0.10,
                                      gap_seconds: float = 30.0) -> bool:
@@ -684,6 +743,10 @@ def analyze_file(
     artifact_window_ms: Tuple[float, float] = (-2, 10),
     decimate_to: Optional[float] = 1000.0,
     min_snr: float = 1.4,
+    tms_marker: Optional[str] = None,
+    max_epochs: Optional[int] = None,
+    exact_epochs: bool = False,
+    dedup_gap_ms: float = 10.0,
     # PCIst parameters (Comolatti et al. 2019)
     pcist_baseline_window: Tuple[float, float] = (-0.400, -0.050),
     pcist_response_window: Tuple[float, float] = (0.000, 0.300),
@@ -760,6 +823,21 @@ def analyze_file(
     comment_markers = [m for m in markers if m["type"] == "Comment"]
     segment_markers = [m for m in markers if m["type"] == "New Segment"]
 
+    # ── Optional: filter Response markers to a specific description ──
+    # BrainVision TMS setups with dual-port triggering often record both a
+    # primary code (e.g. "256") and an auxiliary code (e.g. "257") within a
+    # few samples of the same pulse.  Supply tms_marker="256" to keep only
+    # those markers and avoid the bimodal ISI that fails the periodicity check.
+    if tms_marker:
+        tms_marker = str(tms_marker).strip()
+        all_resp_descs = sorted({m["description"] for m in resp_markers})
+        filtered = [m for m in resp_markers if m["description"] == tms_marker]
+        logger.info(
+            f"tms_marker='{tms_marker}': kept {len(filtered)}/{len(resp_markers)} "
+            f"Response markers (all codes seen: {all_resp_descs})"
+        )
+        resp_markers = filtered
+
     stim_positions = [m["position"] - 1 for m in stim_markers]  # 1-indexed → 0-indexed
 
     # ── Handle Response markers as TMS triggers (common in BrainVision TMS setups) ──
@@ -767,6 +845,13 @@ def analyze_file(
     # Detect if Response markers form a periodic stimulation train.
     resp_positions = [m["position"] - 1 for m in resp_markers]
     resp_used_as_stim = False
+
+    # ── Deduplication: remove double markers within dedup_gap_ms of each other ──
+    # Triggered automatically whenever there is no explicit tms_marker filter,
+    # because dual-port setups fire two codes per pulse and the combined ISI
+    # distribution is bimodal (fails the periodicity check).
+    if len(stim_positions) == 0 and len(resp_positions) > 0:
+        resp_positions = _dedup_markers(resp_positions, sfreq, min_gap_ms=dedup_gap_ms)
 
     if len(stim_positions) == 0 and len(resp_positions) > 0:
         if _detect_periodic_response_train(resp_positions, sfreq):
@@ -778,7 +863,11 @@ def analyze_file(
             stim_markers = resp_markers
             resp_used_as_stim = True
         else:
-            logger.warning("Response markers exist but do not look periodic — not using as TMS triggers")
+            logger.warning(
+                "Response markers exist but do not look periodic — not using as TMS triggers. "
+                "Tip: set tms_marker='256' (or the correct code) in the sidebar to select "
+                "only the TMS pulse markers and ignore auxiliary codes."
+            )
 
     # Also collect all markers for display
     all_marker_positions = [m["position"] - 1 for m in markers]
@@ -912,9 +1001,24 @@ def analyze_file(
 
         # ── Step 8: Epoch extraction ──
         epochs, times, n_accepted, n_rejected = extract_epochs(
-            seg_data, sess_events_local, sfreq_proc, tmin=-0.5, tmax=0.35, reject_uv=reject_uv
+            seg_data, sess_events_local, sfreq_proc,
+            tmin=-0.5, tmax=0.35,
+            reject_uv=reject_uv,
+            max_epochs=max_epochs,
         )
-        logger.info(f"  [EPOCHS] {n_accepted} accepted, {n_rejected} rejected (threshold: {reject_uv} µV)")
+        n_used = epochs.shape[2]  # actual count after optional cap
+        _cap_msg = f", capped to {n_used}" if max_epochs and n_used < n_accepted else ""
+        _exact_warn = ""
+        if exact_epochs and max_epochs is not None and n_accepted < max_epochs:
+            _exact_warn = (
+                f" — WARNING: exact mode requested {max_epochs} epochs but only "
+                f"{n_accepted} clean epochs available"
+            )
+            logger.warning(f"  [EPOCHS] Exact-epoch shortfall: {n_accepted} < {max_epochs}")
+        logger.info(
+            f"  [EPOCHS] {n_accepted} accepted, {n_rejected} rejected "
+            f"(threshold: {reject_uv} µV){_cap_msg}{_exact_warn}"
+        )
 
         del seg_data  # Free memory
 
@@ -987,6 +1091,12 @@ def analyze_file(
                 warnings_list.append(
                     f"High epoch rejection rate ({reject_pct:.0f}%). "
                     f"Suggests residual artifact or suboptimal impedances."
+                )
+            if exact_epochs and max_epochs is not None and n_accepted < max_epochs:
+                warnings_list.append(
+                    f"Exact-epoch shortfall: requested {max_epochs} epochs but only "
+                    f"{n_accepted} clean epochs were available. "
+                    f"Results use {n_accepted} epochs — consider lowering the epoch cap."
                 )
 
             n_ch_used = int(np.sum(ch_mask)) if bad_ch_names else len(ch_names_eeg)
