@@ -355,6 +355,33 @@ def render() -> None:
             st.session_state["max_epochs"] = 0
             st.session_state["epoch_mode"] = "off"
 
+        # ── ICA artifact removal (optional, visible) ────────────────────────
+        st.markdown("---")
+        st.session_state["apply_ica"] = st.checkbox(
+            "ICA artifact temizliği (opsiyonel)",
+            value=bool(st.session_state.get("apply_ica", False)),
+            help=(
+                "Bandpass sonrası FastICA fit eder. Yüksek kurtosisli "
+                "componentler (kas artefaktı gibi spiky sinyaller) otomatik "
+                "çıkarılır. Oturum başına ~15–30 s ekler."
+            ),
+        )
+        if st.session_state["apply_ica"]:
+            st.session_state["ica_kurtosis_thresh"] = st.number_input(
+                "Kurtosis eşiği",
+                min_value=2.0, max_value=20.0,
+                value=float(st.session_state.get("ica_kurtosis_thresh", 5.0)),
+                step=0.5, format="%.1f",
+                help=(
+                    "Bu değerin üzerindeki kurtosise sahip componentler çıkarılır. "
+                    "Düşük = daha agresif temizlik. 5.0 muhafazakar bir varsayılandır."
+                ),
+            )
+            st.caption(
+                f"Kurtosis > {st.session_state['ica_kurtosis_thresh']:.1f} olan "
+                "componentler analiz öncesi çıkarılacak."
+            )
+
         with st.expander("Advanced (Comolatti defaults)", expanded=False):
             st.caption("Defaults follow Comolatti et al. 2019 TMS/EEG settings.")
             c1, c2 = st.columns(2)
@@ -414,27 +441,6 @@ def render() -> None:
                     "QC SNR gate", 0.5, 5.0,
                     float(st.session_state["min_snr_gate"]), 0.1, format="%.1f",
                     help="Sessions below this SNR are flagged UNRELIABLE.",
-                )
-
-            st.markdown("---")
-            st.session_state["apply_ica"] = st.checkbox(
-                "ICA artifact removal",
-                value=bool(st.session_state.get("apply_ica", False)),
-                help=(
-                    "Fit FastICA after bandpass filtering. Components with "
-                    "excess kurtosis > threshold are automatically removed "
-                    "(targets high-amplitude muscle bursts). Adds ~15–30 s per session."
-                ),
-            )
-            if st.session_state["apply_ica"]:
-                st.session_state["ica_kurtosis_thresh"] = st.number_input(
-                    "Kurtosis threshold", 2.0, 20.0,
-                    float(st.session_state.get("ica_kurtosis_thresh", 5.0)), 0.5,
-                    format="%.1f",
-                    help=(
-                        "Components with excess kurtosis above this value are excluded. "
-                        "Lower = more aggressive removal. 5.0 is a conservative default."
-                    ),
                 )
 
         st.caption(
