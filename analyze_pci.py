@@ -358,7 +358,9 @@ def detect_bad_channels(
     for i in range(n_ch):
         v = float(ch_var[i])
         ratio = v / median_var if median_var > 0 else 0.0
-        rms_uv = float(ch_rms[i]) * 1e6
+        # Data is already in µV throughout the pipeline (BrainVision resolution
+        # applied at load; the reject_uv threshold operates on these same values).
+        rms_uv = float(ch_rms[i])
         flagged = False
         reason = ""
 

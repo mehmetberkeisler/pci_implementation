@@ -113,39 +113,36 @@ def _render_rejection_details(sess: Dict[str, Any]) -> None:
     ch_pp = rs.get("ch_max_pp_uv", [])
 
     pct = 100 * n_rej / total if total else 0
-    label = (
-        f"Artifact rejection — {n_acc}/{total} accepted "
+    st.markdown(
+        f"**Artifact rejection — {n_acc}/{total} accepted** "
         f"({pct:.0f}% rejected) · threshold {thresh:.0f} µV · "
         f"window {win[0]}–{win[1]} ms (baseline)"
     )
+    st.caption(
+        f"**Method:** peak-to-peak amplitude in baseline window "
+        f"[{win[0]} ms, {win[1]} ms]. Epoch rejected if ANY channel "
+        f"exceeds **{thresh:.0f} µV**."
+    )
 
-    with st.expander(label, expanded=(n_acc == 0)):
-        st.caption(
-            f"**Method:** peak-to-peak amplitude in baseline window "
-            f"[{win[0]} ms, {win[1]} ms]. Epoch rejected if ANY channel "
-            f"exceeds **{thresh:.0f} µV**."
+    if ch_names and ch_rej:
+        # Build per-channel table, sorted by rejection count descending
+        rows = sorted(
+            zip(ch_names, ch_rej, ch_pp),
+            key=lambda x: x[1],
+            reverse=True,
         )
-
-        if ch_names and ch_rej:
-            # Build per-channel table, sorted by rejection count descending
-            rows = sorted(
-                zip(ch_names, ch_rej, ch_pp),
-                key=lambda x: x[1],
-                reverse=True,
-            )
-            offenders = [(n, c, p) for n, c, p in rows if c > 0]
-            if offenders:
-                st.markdown("**Top offending channels:**")
-                col_headers = ["Channel", "Epochs rejected", "Max p-p (µV)"]
-                table_rows = [
-                    {"Channel": n, "Epochs rejected": c, "Max p-p (µV)": f"{p:.1f}"}
-                    for n, c, p in offenders[:15]
-                ]
-                st.dataframe(table_rows, use_container_width=True, hide_index=True)
-            else:
-                st.success("No channel exceeded the threshold — all epochs accepted.")
+        offenders = [(n, c, p) for n, c, p in rows if c > 0]
+        if offenders:
+            st.markdown("**Top offending channels:**")
+            table_rows = [
+                {"Channel": n, "Epochs rejected": c, "Max p-p (µV)": f"{p:.1f}"}
+                for n, c, p in offenders[:15]
+            ]
+            st.dataframe(table_rows, use_container_width=True, hide_index=True)
         else:
-            st.info("Channel-level breakdown not available.")
+            st.success("No channel exceeded the threshold — all epochs accepted.")
+    else:
+        st.info("Channel-level breakdown not available.")
 
 
 def _qc_status(sess: Dict[str, Any]) -> str:
