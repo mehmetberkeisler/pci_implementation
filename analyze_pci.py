@@ -393,6 +393,7 @@ def interpolate_bad_channels(
     channels_to_interp: List[str],
     method: str = "spline",
     sfreq: float = 1000.0,
+    exclude_from_basis: Optional[List[str]] = None,
 ) -> np.ndarray:
     """Interpolate bad channels in-place using MNE (spline) or neighbor average.
 
@@ -401,11 +402,17 @@ def interpolate_bad_channels(
     method : "spline" | "neighbors"
         "spline"    — MNE spherical spline (standard 10-20 montage auto-matched)
         "neighbors" — unweighted average of nearest channels by name heuristic
+    exclude_from_basis : list[str] | None
+        Other flagged-bad channels that must NOT be used as reference when
+        reconstructing ``channels_to_interp``. Critical: without this, a
+        catastrophically noisy channel that is about to be dropped would still
+        poison the spline/neighbour fit of the channels we want to keep.
     """
     if not channels_to_interp:
         return data
 
     data = data.copy()
+    exclude = set(exclude_from_basis or [])
 
     if method == "spline":
         try:
@@ -419,16 +426,32 @@ def interpolate_bad_channels(
                                     on_missing="ignore", verbose=False)
             except Exception:
                 pass
-            raw_tmp.info["bads"] = channels_to_interp
+            # Mark the interpolation targets AND every other flagged-bad channel
+            # as bad, so MNE reconstructs from the genuinely-clean channels only.
+            # The excluded channels get interpolated values too, but the caller
+            # either drops them or re-interpolates them separately.
+            raw_tmp.info["bads"] = list(dict.fromkeys(list(channels_to_interp) + list(exclude)))
             raw_tmp.interpolate_bads(reset_bads=True, verbose=False)
-            return raw_tmp.get_data().astype(data.dtype)
+            out = raw_tmp.get_data().astype(data.dtype)
+            # Only keep the reconstructed values for the requested targets;
+            # leave excluded channels untouched (caller handles them).
+            idx = {n: i for i, n in enumerate(ch_names)}
+            for ch in channels_to_interp:
+                if ch in idx:
+                    data[idx[ch]] = out[idx[ch]]
+            return data
         except Exception as e:
             logger.warning(f"  [INTERP] Spline failed ({e}), falling back to neighbors")
             method = "neighbors"
 
     if method == "neighbors":
         ch_idx = {n: i for i, n in enumerate(ch_names)}
-        good_idx = [i for i, n in enumerate(ch_names) if n not in channels_to_interp]
+        # Basis excludes the interpolation targets themselves AND any other
+        # flagged-bad channel passed in exclude_from_basis.
+        good_idx = [
+            i for i, n in enumerate(ch_names)
+            if n not in channels_to_interp and n not in exclude
+        ]
         for ch in channels_to_interp:
             if ch not in ch_idx:
                 continue
@@ -1194,15 +1217,21 @@ def analyze_file(
                 final_bad.append(ch)
                 bad_stats[ch] = {**bad_stats.get(ch, {}), "reason": "User-forced drop", "flagged": True}
 
+        # Every flagged-bad channel must be excluded from the interpolation
+        # basis so a channel about to be dropped can't poison the fit of the
+        # channels we're keeping.
+        _all_flagged_bad = set(to_interp_spline) | set(to_interp_neighbors) | set(final_bad)
         if to_interp_spline:
             logger.info(f"  [BAD CH] Interpolating (spline): {to_interp_spline}")
             seg_data = interpolate_bad_channels(
-                seg_data, ch_names_eeg, to_interp_spline, method="spline", sfreq=sfreq_proc
+                seg_data, ch_names_eeg, to_interp_spline, method="spline", sfreq=sfreq_proc,
+                exclude_from_basis=list(_all_flagged_bad - set(to_interp_spline)),
             )
         if to_interp_neighbors:
             logger.info(f"  [BAD CH] Interpolating (neighbors): {to_interp_neighbors}")
             seg_data = interpolate_bad_channels(
-                seg_data, ch_names_eeg, to_interp_neighbors, method="neighbors", sfreq=sfreq_proc
+                seg_data, ch_names_eeg, to_interp_neighbors, method="neighbors", sfreq=sfreq_proc,
+                exclude_from_basis=list(_all_flagged_bad - set(to_interp_neighbors)),
             )
 
         # Build final mask: drop channels in final_bad
