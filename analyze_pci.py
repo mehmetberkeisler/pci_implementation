@@ -325,37 +325,111 @@ def detect_bad_channels(
     ch_names: List[str],
     sfreq: float,
     variance_threshold: float = 5.0,
-) -> Tuple[List[bool], List[str], Dict[str, str]]:
+) -> Tuple[List[bool], List[str], Dict[str, str], Dict[str, Dict]]:
     """Detect bad channels based on variance statistics.
 
-    Flags channels whose variance exceeds variance_threshold × median
-    or is near zero (dead channels).
-
-    Returns:
-        mask: boolean list (True = good channel)
-        bad_names: list of bad channel names
-        reasons: dict mapping channel name → reason string
+    Returns
+    -------
+    mask       : list[bool] — True = good channel
+    bad_names  : list[str]
+    reasons    : dict name → short reason string
+    stats      : dict name → {rms_uv, var_ratio, reason, flagged}
     """
     n_ch = data.shape[0]
     ch_var = np.var(data, axis=1)
+    ch_rms = np.sqrt(ch_var)
     median_var = float(np.median(ch_var))
 
     mask = [True] * n_ch
-    bad_names = []
-    reasons = {}
+    bad_names: List[str] = []
+    reasons: Dict[str, str] = {}
+    stats: Dict[str, Dict] = {}
 
     for i in range(n_ch):
         v = float(ch_var[i])
+        ratio = v / median_var if median_var > 0 else 0.0
+        rms_uv = float(ch_rms[i]) * 1e6
+        flagged = False
+        reason = ""
+
         if median_var > 0 and v > variance_threshold * median_var:
             mask[i] = False
             bad_names.append(ch_names[i])
-            reasons[ch_names[i]] = f"NOISY (var={v:.1f}, {v/median_var:.1f}× median)"
+            reason = f"NOISY ({ratio:.1f}× median variance)"
+            reasons[ch_names[i]] = reason
+            flagged = True
         elif v < median_var * 0.01:
             mask[i] = False
             bad_names.append(ch_names[i])
-            reasons[ch_names[i]] = f"DEAD (var={v:.4f})"
+            reason = f"DEAD (near-zero variance)"
+            reasons[ch_names[i]] = reason
+            flagged = True
 
-    return mask, bad_names, reasons
+        stats[ch_names[i]] = {
+            "rms_uv": round(rms_uv, 2),
+            "var_ratio": round(ratio, 2),
+            "reason": reason,
+            "flagged": flagged,
+        }
+
+    return mask, bad_names, reasons, stats
+
+
+def interpolate_bad_channels(
+    data: np.ndarray,
+    ch_names: List[str],
+    channels_to_interp: List[str],
+    method: str = "spline",
+    sfreq: float = 1000.0,
+) -> np.ndarray:
+    """Interpolate bad channels in-place using MNE (spline) or neighbor average.
+
+    Parameters
+    ----------
+    method : "spline" | "neighbors"
+        "spline"    — MNE spherical spline (standard 10-20 montage auto-matched)
+        "neighbors" — unweighted average of nearest channels by name heuristic
+    """
+    if not channels_to_interp:
+        return data
+
+    data = data.copy()
+
+    if method == "spline":
+        try:
+            import mne
+            info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types="eeg")
+            raw_tmp = mne.io.RawArray(data.astype(np.float64), info, verbose=False)
+            # Try to match standard montage for channel positions
+            montage = mne.channels.make_standard_montage("standard_1020")
+            try:
+                raw_tmp.set_montage(montage, match_case=False,
+                                    on_missing="ignore", verbose=False)
+            except Exception:
+                pass
+            raw_tmp.info["bads"] = channels_to_interp
+            raw_tmp.interpolate_bads(reset_bads=True, verbose=False)
+            return raw_tmp.get_data().astype(data.dtype)
+        except Exception as e:
+            logger.warning(f"  [INTERP] Spline failed ({e}), falling back to neighbors")
+            method = "neighbors"
+
+    if method == "neighbors":
+        ch_idx = {n: i for i, n in enumerate(ch_names)}
+        good_idx = [i for i, n in enumerate(ch_names) if n not in channels_to_interp]
+        for ch in channels_to_interp:
+            if ch not in ch_idx:
+                continue
+            if not good_idx:
+                logger.warning(f"  [INTERP] No good channels for neighbor avg of {ch}")
+                continue
+            # Use up to 4 nearest channels by index distance (simple heuristic)
+            ci = ch_idx[ch]
+            nearest = sorted(good_idx, key=lambda x: abs(x - ci))[:4]
+            data[ci] = np.mean(data[nearest], axis=0)
+            logger.info(f"  [INTERP] {ch} ← avg of {[ch_names[n] for n in nearest]}")
+
+    return data
 
 
 def extract_epochs(
@@ -771,6 +845,7 @@ def analyze_file(
     min_snr: float = 1.4,
     tms_marker: Optional[str] = None,
     tms_marker_type: Optional[str] = None,
+    ch_overrides: Optional[Dict[str, str]] = None,
     max_epochs: Optional[int] = None,
     exact_epochs: bool = False,
     dedup_gap_ms: float = 10.0,
@@ -1008,19 +1083,65 @@ def analyze_file(
             sess_events_local = [int(p / dec_factor) for p in sess_events_local]
             logger.info(f"  [DECIMATE] {sfreq:.0f} → {sfreq_proc:.0f} Hz (factor {dec_factor})")
 
-        # ── Step 5: Bad channel detection (BEFORE CAR to avoid contamination) ──
-        # Per 2023 Brain Stimulation TMS-EEG consensus: detect bad channels
-        # first so noisy channels don't contaminate the average reference.
-        ch_mask, bad_ch_names, bad_reasons = detect_bad_channels(
+        # ── Step 5: Bad channel detection + user overrides ──
+        ch_mask, bad_ch_names, bad_reasons, bad_stats = detect_bad_channels(
             seg_data, ch_names_eeg, sfreq_proc
         )
-        if bad_ch_names:
-            logger.info(f"  [BAD CH] Excluding {len(bad_ch_names)}: {', '.join(bad_ch_names)}")
-            for name, reason in bad_reasons.items():
-                logger.info(f"    {name}: {reason}")
-            seg_data = seg_data[ch_mask]
+
+        # Apply user overrides: drop / interpolate_spline / interpolate_neighbors / keep
+        _overrides = ch_overrides or {}
+        final_bad: List[str] = []       # channels to drop after interpolation
+        to_interp_spline: List[str] = []
+        to_interp_neighbors: List[str] = []
+
+        for ch in bad_ch_names:
+            action = _overrides.get(ch, "drop")
+            if action == "drop":
+                final_bad.append(ch)
+            elif action == "interpolate_spline":
+                to_interp_spline.append(ch)
+            elif action == "interpolate_neighbors":
+                to_interp_neighbors.append(ch)
+            elif action == "keep":
+                pass  # include as-is
+
+        # Also honour explicit overrides for channels auto-marked as good
+        for ch, action in _overrides.items():
+            if ch in bad_ch_names:
+                continue  # already handled above
+            if action == "drop" and ch in ch_names_eeg:
+                final_bad.append(ch)
+                bad_stats[ch] = {**bad_stats.get(ch, {}), "reason": "User-forced drop", "flagged": True}
+
+        if to_interp_spline:
+            logger.info(f"  [BAD CH] Interpolating (spline): {to_interp_spline}")
+            seg_data = interpolate_bad_channels(
+                seg_data, ch_names_eeg, to_interp_spline, method="spline", sfreq=sfreq_proc
+            )
+        if to_interp_neighbors:
+            logger.info(f"  [BAD CH] Interpolating (neighbors): {to_interp_neighbors}")
+            seg_data = interpolate_bad_channels(
+                seg_data, ch_names_eeg, to_interp_neighbors, method="neighbors", sfreq=sfreq_proc
+            )
+
+        # Build final mask: drop channels in final_bad
+        ch_mask = [n not in final_bad for n in ch_names_eeg]
+        kept_names = [n for n, ok in zip(ch_names_eeg, ch_mask) if ok]
+        all_handled = sorted(set(to_interp_spline + to_interp_neighbors + final_bad))
+
+        if all_handled:
+            logger.info(
+                f"  [BAD CH] Detected: {bad_ch_names}  |  "
+                f"Dropped: {final_bad}  |  "
+                f"Interpolated: {to_interp_spline + to_interp_neighbors}  |  "
+                f"Kept: {[c for c in bad_ch_names if c not in all_handled]}"
+            )
         else:
             logger.info(f"  [BAD CH] No bad channels detected")
+
+        if final_bad:
+            seg_data = seg_data[ch_mask]
+            ch_names_eeg = kept_names
 
         # ── Step 6: Average re-reference (CAR) — now on clean channels only ──
         seg_data = average_rereference(seg_data)
@@ -1143,6 +1264,8 @@ def analyze_file(
                 "reject_stats": reject_stats,
                 "n_channels_used": n_ch_used,
                 "bad_channels": bad_ch_names if bad_ch_names else [],
+                "bad_ch_stats": bad_stats,
+                "ch_overrides_applied": dict(_overrides),
                 # PCIst results (primary metric)
                 "pcist": pcist_value,
                 "n_components": pcist_result["n_components"],
@@ -1180,6 +1303,9 @@ def analyze_file(
                 "n_accepted": n_accepted,
                 "n_rejected": n_rejected,
                 "reject_stats": reject_stats,
+                "bad_channels": bad_ch_names if bad_ch_names else [],
+                "bad_ch_stats": bad_stats,
+                "ch_overrides_applied": dict(_overrides),
                 "pcist": None,
                 "error": str(e),
                 "start_time": sess["start_time"],

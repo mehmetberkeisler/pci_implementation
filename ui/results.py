@@ -19,6 +19,77 @@ import streamlit as st
 from . import plots as plots_mod
 
 
+_INTERP_OPTIONS = {
+    "drop": "Drop (exclude)",
+    "interpolate_spline": "Interpolate — spherical spline (MNE)",
+    "interpolate_neighbors": "Interpolate — average neighbors",
+    "keep": "Keep as-is (include despite flag)",
+}
+
+
+def _render_bad_channel_manager(sess: Dict[str, Any], sess_key: str) -> None:
+    """Show bad channel stats and per-channel action dropdowns."""
+    bad_stats: Dict[str, Dict] = sess.get("bad_ch_stats") or {}
+    flagged = {ch: s for ch, s in bad_stats.items() if s.get("flagged")}
+    overrides_applied = sess.get("ch_overrides_applied") or {}
+
+    if not flagged:
+        return
+
+    with st.expander(
+        f"Channel quality — {len(flagged)} flagged channel(s)  "
+        f"(choose action per channel, then Re-run)",
+        expanded=True,
+    ):
+        st.caption(
+            "Set an action for each flagged channel and press "
+            "**Re-run analysis** in the header to apply."
+        )
+
+        ch_overrides = dict(st.session_state.get("ch_overrides") or {})
+        changed = False
+
+        for ch, info in sorted(flagged.items()):
+            reason = info.get("reason", "")
+            rms = info.get("rms_uv", 0.0)
+            ratio = info.get("var_ratio", 0.0)
+            applied = overrides_applied.get(ch, "drop")
+            current = ch_overrides.get(ch, "drop")
+
+            col1, col2, col3 = st.columns([2, 2, 4])
+            col1.markdown(f"**{ch}**")
+            col2.caption(f"{reason}  \n{rms:.1f} µV RMS · {ratio:.1f}× median")
+            chosen = col3.selectbox(
+                f"Action for {ch}",
+                options=list(_INTERP_OPTIONS.keys()),
+                index=list(_INTERP_OPTIONS.keys()).index(current),
+                format_func=lambda k: _INTERP_OPTIONS[k],
+                key=f"ch_override_{sess_key}_{ch}",
+                label_visibility="collapsed",
+            )
+            if chosen != current:
+                ch_overrides[ch] = chosen
+                changed = True
+            elif ch not in ch_overrides:
+                ch_overrides[ch] = "drop"
+
+        if changed:
+            st.session_state["ch_overrides"] = ch_overrides
+            st.info("Action updated — press **Re-run analysis** to apply.")
+        else:
+            applied_flagged = {
+                ch: act for ch, act in overrides_applied.items() if ch in flagged
+            }
+            if applied_flagged:
+                st.caption(
+                    "Last run actions: "
+                    + ", ".join(
+                        f"{ch}: *{_INTERP_OPTIONS.get(act, act)}*"
+                        for ch, act in applied_flagged.items()
+                    )
+                )
+
+
 def _render_rejection_details(sess: Dict[str, Any]) -> None:
     """Expandable artifact rejection breakdown for one session."""
     rs = sess.get("reject_stats")
@@ -281,6 +352,7 @@ def render(result: Dict[str, Any]) -> None:
             with st.expander(title, expanded=(i == 0)):
                 for w in s.get("warnings", []) or []:
                     st.warning(w)
+                _render_bad_channel_manager(s, sess_key=str(i))
                 _render_rejection_details(s)
                 fig = plots_mod.session_detail(s, art_win=art_win)
                 st.pyplot(fig); plt.close(fig)
@@ -288,9 +360,10 @@ def render(result: Dict[str, Any]) -> None:
     # 7. Failed sessions
     if failed:
         st.markdown("### Failed sessions")
-        for f in failed:
+        for i, f in enumerate(failed):
             st.warning(
                 f'**{f["label"]}** — {f.get("error", "Unknown error")} '
                 f'(events: {f.get("n_events", 0)}, accepted: {f.get("n_accepted", 0)})'
             )
+            _render_bad_channel_manager(f, sess_key=f"failed_{i}")
             _render_rejection_details(f)

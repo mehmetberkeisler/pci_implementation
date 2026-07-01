@@ -93,6 +93,7 @@ def _run_analysis() -> None:
                 min_snr=float(ss["min_snr_gate"]),
                 tms_marker=_tms_marker,
                 tms_marker_type=_tms_marker_type,
+                ch_overrides=dict(ss.get("ch_overrides") or {}),
                 max_epochs=_max_epochs,
                 exact_epochs=(_epoch_mode == "exact"),
                 dedup_gap_ms=float(ss.get("dedup_gap_ms", 10.0)),

@@ -32,6 +32,8 @@ DEFAULTS = {
     "tms_marker": "",          # e.g. "R256"; empty = auto-detect
     "tms_marker_type": "",     # "Stimulus" or "Response"; empty = auto-detect
     "dedup_gap_ms": 10.0,      # strip duplicate markers within this window
+    # Bad channel overrides: {ch_name: "drop"|"interpolate_spline"|"interpolate_neighbors"|"keep"}
+    "ch_overrides": {},
     # Epoch balancing
     "epoch_balance_enabled": False,   # toggle for the epoch cap section
     "max_epochs": 0,                  # 0 = disabled; e.g. 60 to cap all subjects at 60
