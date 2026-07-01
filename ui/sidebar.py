@@ -305,12 +305,12 @@ def render() -> None:
         # ── Epoch balancing (optional) ──────────────────────────────────────
         st.markdown("---")
         balance_enabled = st.checkbox(
-            "Epoch sayısını dengele (opsiyonel)",
+            "Balance epoch count (optional)",
             value=bool(st.session_state.get("epoch_balance_enabled", False)),
             help=(
-                "Tüm denekler arasında epoch sayısını eşitlemek için kullanın. "
-                "Önce tüm denekleri bu seçenek kapalıyken çalıştırıp en az temiz "
-                "epoch çıkan deneği bulun, sonra o sayının ~%80-90'ını girin."
+                "Use this to equalize the epoch count across subjects. First run "
+                "every subject with this off to find the one with the fewest clean "
+                "epochs, then enter ~80–90% of that number here."
             ),
         )
         st.session_state["epoch_balance_enabled"] = balance_enabled
@@ -318,38 +318,37 @@ def render() -> None:
         if balance_enabled:
             _current_cap = int(st.session_state.get("max_epochs", 0)) or 60
             _mode = st.radio(
-                "Mod",
-                ["Maksimum (en fazla N epoch)", "Sabit (tam olarak N epoch)"],
+                "Mode",
+                ["Maximum (up to N epochs)", "Fixed (exactly N epochs)"],
                 index=0,
                 horizontal=True,
                 help=(
-                    "Maksimum: temiz epoch sayısı N'den az olursa hepsi alınır. "
-                    "Sabit: her zaman tam olarak N epoch alınır; temiz epoch N'den "
-                    "az olan oturumlar hata verir."
+                    "Maximum: if fewer than N clean epochs exist, all are used. "
+                    "Fixed: always takes exactly N epochs; sessions with fewer "
+                    "clean epochs are flagged."
                 ),
             )
             _cap_value = st.number_input(
-                "Epoch sayısı (N)",
+                "Epoch count (N)",
                 min_value=10, max_value=300,
                 value=_current_cap,
                 step=5,
-                help="Tüm deneklerde aynı değeri kullanın.",
+                help="Use the same value for every subject.",
             )
-            # "Sabit" mod için aynı max_epochs parametresini kullanıyoruz;
-            # fark analyze_pci tarafında zaten kontrol ediliyor (exact mod yok,
-            # ama cap + shuffle yeterince dengeler). İleride exact mod eklenebilir.
+            # "Fixed" mode reuses the same max_epochs parameter; the difference is
+            # handled on the analyze_pci side (cap + shuffle balances well enough).
             st.session_state["max_epochs"] = int(_cap_value)
-            st.session_state["epoch_mode"] = "exact" if "Sabit" in _mode else "cap"
-            if "Sabit" in _mode:
+            st.session_state["epoch_mode"] = "exact" if "Fixed" in _mode else "cap"
+            if "Fixed" in _mode:
                 st.info(
-                    f"Her oturum için tam olarak **{_cap_value}** epoch alınacak. "
-                    "Temiz epoch sayısı bunun altına düşen oturumlar **UNRELIABLE** "
-                    "olarak işaretlenir, analizden çıkarılmaz."
+                    f"Exactly **{_cap_value}** epochs will be taken per session. "
+                    "Sessions with fewer clean epochs are flagged **UNRELIABLE**, "
+                    "not excluded from the analysis."
                 )
             else:
                 st.info(
-                    f"Her oturum için en fazla **{_cap_value}** epoch alınacak "
-                    "(rastgele alt-örnekleme, seed=42)."
+                    f"Up to **{_cap_value}** epochs will be taken per session "
+                    "(random subsampling, seed=42)."
                 )
         else:
             st.session_state["max_epochs"] = 0
@@ -358,28 +357,28 @@ def render() -> None:
         # ── ICA artifact removal (optional, visible) ────────────────────────
         st.markdown("---")
         st.session_state["apply_ica"] = st.checkbox(
-            "ICA artifact temizliği (opsiyonel)",
+            "ICA artifact removal (optional)",
             value=bool(st.session_state.get("apply_ica", False)),
             help=(
-                "Bandpass sonrası FastICA fit eder. Yüksek kurtosisli "
-                "componentler (kas artefaktı gibi spiky sinyaller) otomatik "
-                "çıkarılır. Oturum başına ~15–30 s ekler."
+                "Fits FastICA after bandpass filtering. Components with high "
+                "kurtosis (spiky signals such as muscle artifacts) are removed "
+                "automatically. Adds ~15–30 s per session."
             ),
         )
         if st.session_state["apply_ica"]:
             st.session_state["ica_kurtosis_thresh"] = st.number_input(
-                "Kurtosis eşiği",
+                "Kurtosis threshold",
                 min_value=2.0, max_value=20.0,
                 value=float(st.session_state.get("ica_kurtosis_thresh", 5.0)),
                 step=0.5, format="%.1f",
                 help=(
-                    "Bu değerin üzerindeki kurtosise sahip componentler çıkarılır. "
-                    "Düşük = daha agresif temizlik. 5.0 muhafazakar bir varsayılandır."
+                    "Components with kurtosis above this value are removed. "
+                    "Lower = more aggressive removal. 5.0 is a conservative default."
                 ),
             )
             st.caption(
-                f"Kurtosis > {st.session_state['ica_kurtosis_thresh']:.1f} olan "
-                "componentler analiz öncesi çıkarılacak."
+                f"Components with kurtosis > {st.session_state['ica_kurtosis_thresh']:.1f} "
+                "will be removed before analysis."
             )
 
         with st.expander("Advanced (Comolatti defaults)", expanded=False):
