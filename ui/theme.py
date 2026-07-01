@@ -29,6 +29,8 @@ SESSION_COLORS = ["#1e6091", "#b36b00", "#2a7f3b", "#6a3b8d", "#a02457"]
 
 _CSS = f"""
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
   :root {{
     --ink-900: {INK_900};
     --ink-700: {INK_700};
@@ -42,20 +44,26 @@ _CSS = f"""
     --ok: {OK};
     --warn: {WARN};
     --fail: {FAIL};
-  }}
-
-  html, body, [class*="css"] {{
-    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI",
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI',
                  Roboto, Helvetica, Arial, sans-serif;
-    color: var(--ink-900);
   }}
 
-  .block-container {{ padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1180px; }}
+  /* Apply the modern sans stack everywhere, overriding Streamlit's default. */
+  html, body, [class*="css"], [class*="st-"],
+  button, input, optgroup, select, textarea,
+  [data-testid="stAppViewContainer"], [data-testid="stMarkdownContainer"] {{
+    font-family: var(--font-sans) !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }}
+  body {{ color: var(--ink-900); letter-spacing: -0.005em; }}
 
-  h1, h2, h3, h4 {{ color: var(--ink-900); letter-spacing: -0.01em; }}
-  h1 {{ font-size: 1.65rem; font-weight: 650; margin-bottom: 0.2rem; }}
-  h2 {{ font-size: 1.20rem; font-weight: 600; margin-top: 1.6rem; }}
-  h3 {{ font-size: 1.02rem; font-weight: 600; margin-top: 1.4rem; }}
+  .block-container {{ padding-top: 2.2rem; padding-bottom: 3rem; max-width: 1120px; }}
+
+  h1, h2, h3, h4 {{ color: var(--ink-900); letter-spacing: -0.02em; }}
+  h1 {{ font-size: 1.6rem; font-weight: 700; margin-bottom: 0.2rem; }}
+  h2 {{ font-size: 1.18rem; font-weight: 650; margin-top: 1.6rem; }}
+  h3 {{ font-size: 1.0rem; font-weight: 600; margin-top: 1.4rem; }}
 
   /* Hero */
   .hero {{
@@ -66,8 +74,8 @@ _CSS = f"""
     font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em;
     color: var(--accent); font-weight: 600; margin-bottom: 0.35rem;
   }}
-  .hero-title {{ font-size: 1.7rem; font-weight: 650; margin: 0; }}
-  .hero-sub   {{ color: var(--ink-500); margin: 0.3rem 0 0 0; font-size: 0.95rem; }}
+  .hero-title {{ font-size: 1.6rem; font-weight: 700; margin: 0; letter-spacing: -0.02em; }}
+  .hero-sub   {{ color: var(--ink-500); margin: 0.35rem 0 0 0; font-size: 0.92rem; line-height: 1.5; }}
 
   /* Card primitives */
   .card {{
@@ -147,7 +155,7 @@ def apply_matplotlib_defaults() -> None:
     plt.rcParams.update({
         "font.family": "sans-serif",
         "font.sans-serif": [
-            "Inter", "Helvetica Neue", "Arial", "DejaVu Sans",
+            "Inter", "SF Pro Text", "Helvetica Neue", "Arial", "DejaVu Sans",
         ],
         "font.size": 9,
         "axes.titlesize": 10.5,

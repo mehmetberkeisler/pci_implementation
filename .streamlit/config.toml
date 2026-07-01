@@ -6,8 +6,8 @@ fileWatcherType = "auto"
 enableXsrfProtection = true
 
 [theme]
-primaryColor = "#000000"
+primaryColor = "#111418"
 backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#FAFAFA"
-textColor = "#1A1A1A"
-font = "serif"
+secondaryBackgroundColor = "#F7F8FA"
+textColor = "#14181C"
+font = "sans serif"
