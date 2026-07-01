@@ -28,8 +28,9 @@ DEFAULTS = {
     "pcist_max_var": 99.0,
     "pcist_n_steps": 100,
     "min_snr_gate": 1.4,
-    # Marker selection (new data: Response port markers 256/257)
-    "tms_marker": "",          # e.g. "256"; empty = auto-detect
+    # Marker selection
+    "tms_marker": "",          # e.g. "R256"; empty = auto-detect
+    "tms_marker_type": "",     # "Stimulus" or "Response"; empty = auto-detect
     "dedup_gap_ms": 10.0,      # strip duplicate markers within this window
     # Epoch balancing
     "epoch_balance_enabled": False,   # toggle for the epoch cap section

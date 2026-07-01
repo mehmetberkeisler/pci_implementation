@@ -113,6 +113,135 @@ def _build_preview(vhdr_path: str, gap_seconds: float) -> Dict[str, Any]:
     }
 
 
+def _build_marker_candidates(vhdr_path: Optional[str], sfreq=None) -> list:
+    """Return list of candidate TMS marker dicts with ISI stats.
+
+    Each entry: {type, description, count, median_isi, cv, auto_ok, label}
+    """
+    if not vhdr_path:
+        return []
+    try:
+        import numpy as np
+        _info = parse_vhdr(vhdr_path)
+        _sfreq = sfreq or _info.get("sfreq", 1.0) or 1.0
+        _base = os.path.dirname(vhdr_path)
+        _mkr_file = _info.get("marker_file", "")
+        if not _mkr_file:
+            return []
+        _all = parse_vmrk(os.path.join(_base, _mkr_file))
+
+        from analyze_pci import _detect_periodic_response_train, _dedup_markers
+        import collections
+
+        by_key: Dict[str, list] = collections.defaultdict(list)
+        for m in _all:
+            if m["type"] in ("Stimulus", "Response"):
+                by_key[f"{m['type']}|{m['description']}"].append(m["position"])
+
+        candidates = []
+        for key, positions in sorted(by_key.items()):
+            mtype, mdesc = key.split("|", 1)
+            pos = sorted(positions)
+            # Dedup preview
+            pos_dedup = _dedup_markers(pos, _sfreq, min_gap_ms=10.0)
+            n_raw = len(pos)
+            n_dedup = len(pos_dedup)
+            isi = np.diff(pos_dedup) / _sfreq if len(pos_dedup) > 1 else np.array([])
+            med_isi = float(np.median(isi)) if len(isi) else 0.0
+            cv = float(np.std(isi) / np.mean(isi)) if len(isi) and np.mean(isi) > 0 else 99.0
+            auto_ok = _detect_periodic_response_train(pos_dedup, _sfreq)
+            dedup_note = f" → {n_dedup} after dedup" if n_dedup < n_raw else ""
+            status = "✅" if auto_ok else ("⚠️" if 0.2 <= med_isi <= 15.0 else "❌")
+            label = (
+                f"[{mtype}] {mdesc} — {n_raw}x{dedup_note} | "
+                f"ISI {med_isi:.1f}s | CV {cv:.2f} {status}"
+            )
+            candidates.append({
+                "type": mtype,
+                "description": mdesc,
+                "count": n_raw,
+                "count_dedup": n_dedup,
+                "median_isi": med_isi,
+                "cv": cv,
+                "auto_ok": auto_ok,
+                "label": label,
+                "key": key,
+            })
+        return candidates
+    except Exception:
+        return []
+
+
+def _render_marker_selector(candidates: list) -> None:
+    """Render marker selection UI and update session state."""
+    if not candidates:
+        # No file uploaded yet or parse failed — keep text input fallback
+        st.session_state["tms_marker"] = st.text_input(
+            "TMS marker code",
+            value=st.session_state.get("tms_marker", ""),
+            placeholder="e.g. R256 — leave blank for auto",
+        )
+        st.session_state["tms_marker_type"] = ""
+        return
+
+    # Build selectbox options
+    auto_label = "(auto-detect)"
+    option_labels = [auto_label] + [c["label"] for c in candidates]
+
+    # Determine current selection index
+    current_key = (
+        f"{st.session_state.get('tms_marker_type', '')}|"
+        f"{st.session_state.get('tms_marker', '')}"
+    )
+    current_idx = 0
+    for i, c in enumerate(candidates, start=1):
+        if c["key"] == current_key:
+            current_idx = i
+            break
+
+    # Auto-select when there is exactly one plausible candidate
+    auto_candidates = [c for c in candidates if c["auto_ok"]]
+    if len(candidates) == 1:
+        # Only one code in the file — always auto-select
+        chosen_idx = 1
+        st.caption(
+            f"TMS marker auto-selected: **{candidates[0]['description']}** "
+            f"({candidates[0]['count']}x, ISI {candidates[0]['median_isi']:.1f}s)"
+        )
+    elif len(auto_candidates) == 1 and current_idx == 0:
+        # Exactly one passes auto-detection; pre-select it but show dropdown
+        chosen_idx = candidates.index(auto_candidates[0]) + 1
+    else:
+        chosen_idx = current_idx
+
+    if len(candidates) > 1 or (len(candidates) == 1 and not candidates[0]["auto_ok"]):
+        chosen_idx = st.selectbox(
+            "TMS trigger marker",
+            range(len(option_labels)),
+            index=chosen_idx,
+            format_func=lambda i: option_labels[i],
+            help=(
+                "✅ = auto-detected as periodic  ⚠️ = jittered ISI (valid TMS protocol)  "
+                "❌ = not in TMS ISI range. "
+                "Select the code that corresponds to TMS pulses. "
+                "Dedup removes duplicate markers within 10 ms of each other."
+            ),
+        )
+
+    if chosen_idx == 0:
+        st.session_state["tms_marker"] = ""
+        st.session_state["tms_marker_type"] = ""
+    else:
+        chosen = candidates[chosen_idx - 1]
+        st.session_state["tms_marker"] = chosen["description"]
+        st.session_state["tms_marker_type"] = chosen["type"]
+        if chosen["count_dedup"] < chosen["count"]:
+            st.caption(
+                f"Dedup: {chosen['count']} → {chosen['count_dedup']} markers "
+                f"({chosen['count'] - chosen['count_dedup']} duplicates removed within 10 ms)"
+            )
+
+
 def _file_uploader() -> Optional[Dict[str, Any]]:
     """Grab the .vhdr/.vmrk/.eeg triple from the user."""
     st.markdown("#### Upload recording")
@@ -165,62 +294,11 @@ def render() -> None:
         st.markdown("---")
         st.markdown("#### Analysis parameters")
 
-        # ── Marker selection (shown outside the expander for quick access) ──
-        preview = st.session_state.get("preview") or {}
-        resp_descs: list = []
-        if st.session_state.get("vhdr_path"):
-            try:
-                from analyze_pci import parse_vhdr, parse_vmrk
-                import os
-                _info = parse_vhdr(st.session_state["vhdr_path"])
-                _base = os.path.dirname(st.session_state["vhdr_path"])
-                _mkr_file = _info.get("marker_file", "")
-                if _mkr_file:
-                    _all_mkrs = parse_vmrk(os.path.join(_base, _mkr_file))
-                    resp_descs = sorted({
-                        m["description"]
-                        for m in _all_mkrs
-                        if m["type"] == "Response"
-                    })
-            except Exception:
-                pass
-
-        if resp_descs:
-            if len(resp_descs) == 1:
-                # Single response code — auto-select it, no dropdown needed
-                st.session_state["tms_marker"] = resp_descs[0]
-                st.caption(f"TMS marker: **{resp_descs[0]}** (auto-selected, only code found)")
-            else:
-                options = ["(auto)"] + resp_descs
-                current = st.session_state.get("tms_marker", "")
-                default_idx = options.index(current) if current in options else 0
-                chosen = st.selectbox(
-                    "TMS marker code",
-                    options,
-                    index=default_idx,
-                    help=(
-                        "Response-port marker code that corresponds to the TMS pulse. "
-                        "Select the correct code when your recording has double markers "
-                        "(e.g. both '256' and '257' per pulse). '(auto)' uses all "
-                        "Response markers and applies automatic deduplication."
-                    ),
-                )
-                st.session_state["tms_marker"] = "" if chosen == "(auto)" else chosen
-                st.caption(
-                    f"Response codes found: {', '.join(resp_descs)}. "
-                    "Select the TMS code above; the other will be ignored."
-                )
-        else:
-            st.session_state["tms_marker"] = st.text_input(
-                "TMS marker code",
-                value=st.session_state.get("tms_marker", ""),
-                placeholder="e.g. 256 — leave blank for auto",
-                help=(
-                    "Leave blank for auto-detection. Enter the marker description "
-                    "(e.g. '256') when the pipeline reports 0 TMS triggers. "
-                    "Only valid for Response-port markers."
-                ),
-            )
+        # ── Marker selection ──────────────────────────────────────────────────
+        _marker_candidates = _build_marker_candidates(
+            st.session_state.get("vhdr_path"), sfreq=None
+        )
+        _render_marker_selector(_marker_candidates)
 
         # ── Epoch balancing (optional) ──────────────────────────────────────
         st.markdown("---")

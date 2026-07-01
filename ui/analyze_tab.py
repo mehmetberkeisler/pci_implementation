@@ -80,6 +80,7 @@ def _run_analysis() -> None:
     with st.spinner("Running PCIst pipeline — this takes ~30 s per session…"):
         try:
             _tms_marker = (ss.get("tms_marker") or "").strip() or None
+            _tms_marker_type = (ss.get("tms_marker_type") or "").strip() or None
             _max_epochs = int(ss.get("max_epochs", 0)) or None
             _epoch_mode = ss.get("epoch_mode", "off")  # "off" | "cap" | "exact"
             result = analyze_file(
@@ -91,6 +92,7 @@ def _run_analysis() -> None:
                 decimate_to=float(ss["decimate_to"]),
                 min_snr=float(ss["min_snr_gate"]),
                 tms_marker=_tms_marker,
+                tms_marker_type=_tms_marker_type,
                 max_epochs=_max_epochs,
                 exact_epochs=(_epoch_mode == "exact"),
                 dedup_gap_ms=float(ss.get("dedup_gap_ms", 10.0)),

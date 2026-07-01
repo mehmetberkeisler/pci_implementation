@@ -750,6 +750,7 @@ def analyze_file(
     decimate_to: Optional[float] = 1000.0,
     min_snr: float = 1.4,
     tms_marker: Optional[str] = None,
+    tms_marker_type: Optional[str] = None,
     max_epochs: Optional[int] = None,
     exact_epochs: bool = False,
     dedup_gap_ms: float = 10.0,
@@ -829,53 +830,46 @@ def analyze_file(
     comment_markers = [m for m in markers if m["type"] == "Comment"]
     segment_markers = [m for m in markers if m["type"] == "New Segment"]
 
-    # ── Optional: filter Response markers to a specific description ──
-    # BrainVision TMS setups with dual-port triggering often record both a
-    # primary code (e.g. "256") and an auxiliary code (e.g. "257") within a
-    # few samples of the same pulse.  Supply tms_marker="256" to keep only
-    # those markers and avoid the bimodal ISI that fails the periodicity check.
-    if tms_marker:
+    # ── Explicit TMS marker selection (user override) ──
+    # tms_marker_type: "Stimulus" or "Response"
+    # tms_marker:      description string (e.g. "R256", "S8192", "R 16")
+    # When both are set the user has explicitly identified the TMS markers —
+    # skip all auto-detection and periodicity checks entirely.
+    explicit_selection = bool(tms_marker and tms_marker_type)
+    if explicit_selection:
         tms_marker = str(tms_marker).strip()
-        all_resp_descs = sorted({m["description"] for m in resp_markers})
-        filtered = [m for m in resp_markers if m["description"] == tms_marker]
+        tms_marker_type = str(tms_marker_type).strip()
+        pool = stim_markers if tms_marker_type == "Stimulus" else resp_markers
+        all_descs = sorted({m["description"] for m in pool})
+        selected = [m for m in pool if m["description"] == tms_marker]
         logger.info(
-            f"tms_marker='{tms_marker}': kept {len(filtered)}/{len(resp_markers)} "
-            f"Response markers (all codes seen: {all_resp_descs})"
+            f"User selected [{tms_marker_type}] '{tms_marker}': "
+            f"{len(selected)}/{len(pool)} markers kept (all codes: {all_descs})"
         )
-        resp_markers = filtered
+        # Dedup in case of dual-port double-markers
+        sel_positions = _dedup_markers(
+            [m["position"] - 1 for m in selected], sfreq, min_gap_ms=dedup_gap_ms
+        )
+        logger.info(
+            f"Using {len(sel_positions)} markers as TMS triggers "
+            f"(periodicity check skipped — explicit selection)."
+        )
+        stim_positions = sel_positions
+        stim_markers = selected
+        resp_positions: List[int] = []
+        resp_used_as_stim = tms_marker_type == "Response"
+    else:
+        # ── Auto-detection ──
+        stim_positions = [m["position"] - 1 for m in stim_markers]
+        resp_positions = [m["position"] - 1 for m in resp_markers]
+        resp_used_as_stim = False
 
-    stim_positions = [m["position"] - 1 for m in stim_markers]  # 1-indexed → 0-indexed
-
-    # ── Handle Response markers as TMS triggers (common in BrainVision TMS setups) ──
-    # In many TMS systems, TTL pulses arrive on the Response port.
-    # Detect if Response markers form a periodic stimulation train.
-    resp_positions = [m["position"] - 1 for m in resp_markers]
-    resp_used_as_stim = False
-
-    # ── Deduplication + periodicity check ──
-    # When tms_marker is explicitly set, the user has identified these markers
-    # as TMS triggers — skip the periodicity check and use them directly.
-    # This supports jittered-ISI protocols (CV > 0.10) which fail the check.
-    # Auto-detection (no tms_marker) still requires periodicity to avoid false
-    # positives from Response markers that are not TMS triggers.
-    if len(stim_positions) == 0 and len(resp_positions) > 0:
-        if tms_marker:
-            # Explicit selection: trust the user, only dedup if needed
-            resp_positions = _dedup_markers(resp_positions, sfreq, min_gap_ms=dedup_gap_ms)
-            logger.info(
-                f"tms_marker explicitly set — skipping periodicity check. "
-                f"Using {len(resp_positions)} Response markers as TMS triggers."
-            )
-            stim_positions = resp_positions
-            stim_markers = resp_markers
-            resp_used_as_stim = True
-        else:
-            # Auto-detection: dedup first, then require periodicity
+        if len(stim_positions) == 0 and len(resp_positions) > 0:
             resp_positions = _dedup_markers(resp_positions, sfreq, min_gap_ms=dedup_gap_ms)
             if _detect_periodic_response_train(resp_positions, sfreq):
                 logger.info(
-                    f"No Stimulus markers found, but {len(resp_positions)} Response markers "
-                    f"form a periodic train (likely TMS TTL). Using Response markers as stimuli."
+                    f"Auto-detected {len(resp_positions)} periodic Response markers "
+                    f"as TMS triggers."
                 )
                 stim_positions = resp_positions
                 stim_markers = resp_markers
@@ -883,8 +877,7 @@ def analyze_file(
             else:
                 logger.warning(
                     "Response markers exist but do not look periodic — not using as TMS triggers. "
-                    "Tip: set tms_marker='256' (or the correct code) in the sidebar to select "
-                    "only the TMS pulse markers and ignore auxiliary codes."
+                    "Select the correct marker code in the sidebar."
                 )
 
     # Also collect all markers for display
