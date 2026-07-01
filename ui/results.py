@@ -36,58 +36,56 @@ def _render_bad_channel_manager(sess: Dict[str, Any], sess_key: str) -> None:
     if not flagged:
         return
 
-    with st.expander(
-        f"Channel quality — {len(flagged)} flagged channel(s)  "
-        f"(choose action per channel, then Re-run)",
-        expanded=True,
-    ):
-        st.caption(
-            "Set an action for each flagged channel and press "
-            "**Re-run analysis** in the header to apply."
+    st.markdown(
+        f"**Channel quality — {len(flagged)} flagged channel(s)** "
+        f"— set action per channel, then Re-run"
+    )
+    st.caption(
+        "Set an action for each flagged channel and press "
+        "**Re-run analysis** to apply."
+    )
+
+    ch_overrides = dict(st.session_state.get("ch_overrides") or {})
+    changed = False
+
+    for ch, info in sorted(flagged.items()):
+        reason = info.get("reason", "")
+        rms = info.get("rms_uv", 0.0)
+        ratio = info.get("var_ratio", 0.0)
+        current = ch_overrides.get(ch, "drop")
+
+        col1, col2, col3 = st.columns([2, 2, 4])
+        col1.markdown(f"**{ch}**")
+        col2.caption(f"{reason}  \n{rms:.1f} µV RMS · {ratio:.1f}× median")
+        chosen = col3.selectbox(
+            f"Action for {ch}",
+            options=list(_INTERP_OPTIONS.keys()),
+            index=list(_INTERP_OPTIONS.keys()).index(current),
+            format_func=lambda k: _INTERP_OPTIONS[k],
+            key=f"ch_override_{sess_key}_{ch}",
+            label_visibility="collapsed",
         )
+        if chosen != current:
+            ch_overrides[ch] = chosen
+            changed = True
+        elif ch not in ch_overrides:
+            ch_overrides[ch] = "drop"
 
-        ch_overrides = dict(st.session_state.get("ch_overrides") or {})
-        changed = False
-
-        for ch, info in sorted(flagged.items()):
-            reason = info.get("reason", "")
-            rms = info.get("rms_uv", 0.0)
-            ratio = info.get("var_ratio", 0.0)
-            applied = overrides_applied.get(ch, "drop")
-            current = ch_overrides.get(ch, "drop")
-
-            col1, col2, col3 = st.columns([2, 2, 4])
-            col1.markdown(f"**{ch}**")
-            col2.caption(f"{reason}  \n{rms:.1f} µV RMS · {ratio:.1f}× median")
-            chosen = col3.selectbox(
-                f"Action for {ch}",
-                options=list(_INTERP_OPTIONS.keys()),
-                index=list(_INTERP_OPTIONS.keys()).index(current),
-                format_func=lambda k: _INTERP_OPTIONS[k],
-                key=f"ch_override_{sess_key}_{ch}",
-                label_visibility="collapsed",
-            )
-            if chosen != current:
-                ch_overrides[ch] = chosen
-                changed = True
-            elif ch not in ch_overrides:
-                ch_overrides[ch] = "drop"
-
-        if changed:
-            st.session_state["ch_overrides"] = ch_overrides
-            st.info("Action updated — press **Re-run analysis** to apply.")
-        else:
-            applied_flagged = {
-                ch: act for ch, act in overrides_applied.items() if ch in flagged
-            }
-            if applied_flagged:
-                st.caption(
-                    "Last run actions: "
-                    + ", ".join(
-                        f"{ch}: *{_INTERP_OPTIONS.get(act, act)}*"
-                        for ch, act in applied_flagged.items()
-                    )
+    if changed:
+        st.session_state["ch_overrides"] = ch_overrides
+        st.info("Action updated — press **Re-run analysis** to apply.")
+    else:
+        applied_flagged = {
+            ch: act for ch, act in overrides_applied.items() if ch in flagged
+        }
+        if applied_flagged:
+            st.caption(
+                "Last run actions: "
+                + ", ".join(
+                    f"{ch}: *{_INTERP_OPTIONS.get(act, act)}*"
+                    for ch, act in applied_flagged.items()
                 )
+            )
 
 
 def _render_pipeline_log(result: Dict[str, Any]) -> None:
