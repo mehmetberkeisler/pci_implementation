@@ -90,6 +90,15 @@ def _render_bad_channel_manager(sess: Dict[str, Any], sess_key: str) -> None:
                 )
 
 
+def _render_pipeline_log(result: Dict[str, Any]) -> None:
+    """Collapsed expander showing captured logger output from the pipeline run."""
+    lines = result.get("pipeline_log") or []
+    if not lines:
+        return
+    with st.expander("Pipeline log", expanded=False):
+        st.code("\n".join(lines), language=None)
+
+
 def _render_rejection_details(sess: Dict[str, Any]) -> None:
     """Expandable artifact rejection breakdown for one session."""
     rs = sess.get("reject_stats")
@@ -313,6 +322,7 @@ def render(result: Dict[str, Any]) -> None:
     # 1. Recording summary
     st.markdown("### Recording")
     _recording_summary(result)
+    _render_pipeline_log(result)
 
     # 2. Session cards (big PCIst numbers, always visible)
     st.markdown("### Session results")

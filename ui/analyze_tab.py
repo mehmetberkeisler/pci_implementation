@@ -97,6 +97,8 @@ def _run_analysis() -> None:
                 max_epochs=_max_epochs,
                 exact_epochs=(_epoch_mode == "exact"),
                 dedup_gap_ms=float(ss.get("dedup_gap_ms", 10.0)),
+                apply_ica=bool(ss.get("apply_ica", False)),
+                ica_kurtosis_thresh=float(ss.get("ica_kurtosis_thresh", 5.0)),
                 pcist_baseline_window=(-0.400, -0.050),
                 pcist_response_window=(0.0, 0.300),
                 pcist_k=float(ss["pcist_k"]),

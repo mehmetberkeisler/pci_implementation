@@ -15,6 +15,8 @@ main tab's "Run analysis" button, not here.
 
 from __future__ import annotations
 
+import io
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -414,7 +416,61 @@ def render() -> None:
                     help="Sessions below this SNR are flagged UNRELIABLE.",
                 )
 
+            st.markdown("---")
+            st.session_state["apply_ica"] = st.checkbox(
+                "ICA artifact removal",
+                value=bool(st.session_state.get("apply_ica", False)),
+                help=(
+                    "Fit FastICA after bandpass filtering. Components with "
+                    "excess kurtosis > threshold are automatically removed "
+                    "(targets high-amplitude muscle bursts). Adds ~15–30 s per session."
+                ),
+            )
+            if st.session_state["apply_ica"]:
+                st.session_state["ica_kurtosis_thresh"] = st.number_input(
+                    "Kurtosis threshold", 2.0, 20.0,
+                    float(st.session_state.get("ica_kurtosis_thresh", 5.0)), 0.5,
+                    format="%.1f",
+                    help=(
+                        "Components with excess kurtosis above this value are excluded. "
+                        "Lower = more aggressive removal. 5.0 is a conservative default."
+                    ),
+                )
+
         st.caption(
             "Pipeline: artifact interpolation -> decimate -> CAR -> "
             "bandpass 0.1-45 Hz -> epoch -> PCIst (renzocom/PCIst reference)."
         )
+
+        # ── Parameter presets (save / load) ─────────────────────────────────
+        _PRESET_KEYS = [
+            "reject_uv", "gap_seconds", "artifact_start_ms", "artifact_end_ms",
+            "dedup_gap_ms", "decimate_to", "pcist_k", "pcist_min_snr",
+            "pcist_max_var", "pcist_n_steps", "min_snr_gate",
+            "max_epochs", "epoch_mode", "epoch_balance_enabled",
+            "apply_ica", "ica_kurtosis_thresh",
+        ]
+        st.markdown("---")
+        with st.expander("Parameter presets", expanded=False):
+            preset_data = {k: st.session_state.get(k) for k in _PRESET_KEYS}
+            st.download_button(
+                "Save preset (JSON)",
+                data=json.dumps(preset_data, indent=2),
+                file_name="pcist_preset.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+            uploaded_preset = st.file_uploader(
+                "Load preset", type="json", key="preset_uploader",
+                label_visibility="collapsed",
+            )
+            if uploaded_preset is not None:
+                try:
+                    loaded = json.loads(uploaded_preset.read())
+                    for k, v in loaded.items():
+                        if k in _PRESET_KEYS and v is not None:
+                            st.session_state[k] = v
+                    st.success("Preset loaded — Re-run analysis to apply.")
+                    state_mod.reset_result()
+                except Exception as e:
+                    st.error(f"Could not load preset: {e}")

@@ -34,6 +34,9 @@ DEFAULTS = {
     "dedup_gap_ms": 10.0,      # strip duplicate markers within this window
     # Bad channel overrides: {ch_name: "drop"|"interpolate_spline"|"interpolate_neighbors"|"keep"}
     "ch_overrides": {},
+    # ICA artifact removal
+    "apply_ica": False,
+    "ica_kurtosis_thresh": 5.0,
     # Epoch balancing
     "epoch_balance_enabled": False,   # toggle for the epoch cap section
     "max_epochs": 0,                  # 0 = disabled; e.g. 60 to cap all subjects at 60

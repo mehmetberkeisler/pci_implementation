@@ -21,6 +21,16 @@ import numpy as np
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 logger = logging.getLogger("pcist_analyzer")
 
+
+class _ListHandler(logging.Handler):
+    """Capture log records into a list so we can return them from analyze_file."""
+    def __init__(self):
+        super().__init__()
+        self.lines: List[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.lines.append(self.format(record))
+
 # ═══════════════════════════════════════════════════════════════════════════
 # §1 BRAINVISION FILE PARSER
 # ═══════════════════════════════════════════════════════════════════════════
@@ -430,6 +440,69 @@ def interpolate_bad_channels(
             logger.info(f"  [INTERP] {ch} ← avg of {[ch_names[n] for n in nearest]}")
 
     return data
+
+
+def _kurtosis(x: np.ndarray) -> float:
+    """Excess kurtosis (Fisher definition, same as scipy.stats.kurtosis default)."""
+    mean = np.mean(x)
+    m2 = np.mean((x - mean) ** 2)
+    m4 = np.mean((x - mean) ** 4)
+    return float(m4 / (m2 ** 2) - 3.0) if m2 > 0 else 0.0
+
+
+def _apply_ica(
+    seg_data: np.ndarray,
+    ch_names: List[str],
+    sfreq: float,
+    n_components: int = 20,
+    kurtosis_thresh: float = 5.0,
+) -> Tuple[np.ndarray, List[int]]:
+    """Fit FastICA and remove high-kurtosis artifact components.
+
+    Returns (cleaned_data_uv, excluded_component_indices).
+    Falls back to (original_data, []) if MNE is unavailable or ICA fails.
+    """
+    try:
+        import mne
+        from mne.preprocessing import ICA as _ICA
+    except ImportError:
+        logger.warning("  [ICA] MNE not installed — skipping ICA step")
+        return seg_data, []
+
+    try:
+        n_ch = seg_data.shape[0]
+        n_comp = min(n_components, n_ch - 1, 25)
+
+        info = mne.create_info(ch_names=list(ch_names), sfreq=sfreq, ch_types="eeg")
+        raw = mne.io.RawArray(seg_data.astype(np.float64) * 1e-6, info, verbose=False)
+        try:
+            montage = mne.channels.make_standard_montage("standard_1020")
+            raw.set_montage(montage, on_missing="ignore", verbose=False)
+        except Exception:
+            pass
+
+        ica = _ICA(n_components=n_comp, method="fastica", random_state=42,
+                   max_iter=500, verbose=False)
+        ica.fit(raw, verbose=False)
+
+        sources = ica.get_sources(raw).get_data()
+        k_scores = [_kurtosis(s) for s in sources]
+        excluded = [i for i, k in enumerate(k_scores) if k > kurtosis_thresh]
+
+        if excluded:
+            ica.apply(raw, exclude=excluded, verbose=False)
+            logger.info(
+                f"  [ICA] Excluded {len(excluded)} components "
+                f"(kurtosis > {kurtosis_thresh}): {excluded}"
+            )
+        else:
+            logger.info(f"  [ICA] No high-kurtosis components found (thresh={kurtosis_thresh})")
+
+        return raw.get_data().astype(np.float32) * 1e6, excluded
+
+    except Exception as e:
+        logger.warning(f"  [ICA] Failed — skipping: {e}")
+        return seg_data, []
 
 
 def extract_epochs(
@@ -849,6 +922,8 @@ def analyze_file(
     max_epochs: Optional[int] = None,
     exact_epochs: bool = False,
     dedup_gap_ms: float = 10.0,
+    apply_ica: bool = False,
+    ica_kurtosis_thresh: float = 5.0,
     # PCIst parameters (Comolatti et al. 2019)
     pcist_baseline_window: Tuple[float, float] = (-0.400, -0.050),
     pcist_response_window: Tuple[float, float] = (0.000, 0.300),
@@ -882,6 +957,10 @@ def analyze_file(
     pcist_n_steps : int
         Number of distance thresholds to scan (default 100).
     """
+
+    _log_handler = _ListHandler()
+    _log_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    logger.addHandler(_log_handler)
 
     logger.info(f"Loading header & markers from {vhdr_path}")
 
@@ -1151,6 +1230,14 @@ def analyze_file(
         seg_data = bandpass_filter(seg_data, sfreq_proc, low=0.1, high=45.0)
         logger.info(f"  [FILTER] Bandpass 0.1–45 Hz applied")
 
+        # ── Step 7b: ICA artifact removal (optional) ──
+        ica_excluded: List[int] = []
+        if apply_ica:
+            seg_data, ica_excluded = _apply_ica(
+                seg_data, ch_names_eeg, sfreq_proc,
+                kurtosis_thresh=ica_kurtosis_thresh,
+            )
+
         # ── Step 8: Epoch extraction ──
         epochs, times, n_accepted, n_rejected, reject_stats = extract_epochs(
             seg_data, sess_events_local, sfreq_proc,
@@ -1185,6 +1272,10 @@ def analyze_file(
                 "n_accepted": n_accepted,
                 "n_rejected": n_rejected,
                 "reject_stats": reject_stats,
+                "bad_channels": bad_ch_names if bad_ch_names else [],
+                "bad_ch_stats": bad_stats,
+                "ch_overrides_applied": dict(_overrides),
+                "ica_excluded": ica_excluded,
                 "pcist": None,
                 "error": "Too few epochs after rejection",
                 "start_time": sess["start_time"],
@@ -1266,6 +1357,7 @@ def analyze_file(
                 "bad_channels": bad_ch_names if bad_ch_names else [],
                 "bad_ch_stats": bad_stats,
                 "ch_overrides_applied": dict(_overrides),
+                "ica_excluded": ica_excluded,
                 # PCIst results (primary metric)
                 "pcist": pcist_value,
                 "n_components": pcist_result["n_components"],
@@ -1306,6 +1398,7 @@ def analyze_file(
                 "bad_channels": bad_ch_names if bad_ch_names else [],
                 "bad_ch_stats": bad_stats,
                 "ch_overrides_applied": dict(_overrides),
+                "ica_excluded": ica_excluded,
                 "pcist": None,
                 "error": str(e),
                 "start_time": sess["start_time"],
@@ -1314,8 +1407,11 @@ def analyze_file(
                 "median_isi": sess.get("median_isi", 0),
             })
 
+    logger.removeHandler(_log_handler)
+
     return {
         "file": os.path.basename(vhdr_path),
+        "pipeline_log": _log_handler.lines,
         "n_channels": n_ch,
         "ch_names": ch_names_eeg,
         "display_ch_names": ch_names_eeg[:20],
