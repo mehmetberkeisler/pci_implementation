@@ -186,22 +186,26 @@ def render() -> None:
                 pass
 
         if resp_descs:
-            options = ["(auto)"] + resp_descs
-            current = st.session_state.get("tms_marker", "")
-            default_idx = options.index(current) if current in options else 0
-            chosen = st.selectbox(
-                "TMS marker code",
-                options,
-                index=default_idx,
-                help=(
-                    "Response-port marker code that corresponds to the TMS pulse. "
-                    "Select the correct code when your recording has double markers "
-                    "(e.g. both '256' and '257' per pulse). '(auto)' uses all "
-                    "Response markers and applies automatic deduplication."
-                ),
-            )
-            st.session_state["tms_marker"] = "" if chosen == "(auto)" else chosen
-            if len(resp_descs) > 1:
+            if len(resp_descs) == 1:
+                # Single response code — auto-select it, no dropdown needed
+                st.session_state["tms_marker"] = resp_descs[0]
+                st.caption(f"TMS marker: **{resp_descs[0]}** (auto-selected, only code found)")
+            else:
+                options = ["(auto)"] + resp_descs
+                current = st.session_state.get("tms_marker", "")
+                default_idx = options.index(current) if current in options else 0
+                chosen = st.selectbox(
+                    "TMS marker code",
+                    options,
+                    index=default_idx,
+                    help=(
+                        "Response-port marker code that corresponds to the TMS pulse. "
+                        "Select the correct code when your recording has double markers "
+                        "(e.g. both '256' and '257' per pulse). '(auto)' uses all "
+                        "Response markers and applies automatic deduplication."
+                    ),
+                )
+                st.session_state["tms_marker"] = "" if chosen == "(auto)" else chosen
                 st.caption(
                     f"Response codes found: {', '.join(resp_descs)}. "
                     "Select the TMS code above; the other will be ignored."

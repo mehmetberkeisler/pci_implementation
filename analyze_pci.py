@@ -365,6 +365,7 @@ def extract_epochs(
     tmin: float = -0.5,
     tmax: float = 0.35,
     reject_uv: float = 150.0,
+    reject_tmax: float = 0.0,
     max_epochs: Optional[int] = None,
     random_seed: int = 42,
 ) -> Tuple[np.ndarray, np.ndarray, int, int]:
@@ -406,8 +407,13 @@ def extract_epochs(
 
         epoch = data[:, start:end]  # (n_ch, n_times)
 
-        # Artifact rejection: peak-to-peak per channel
-        pp = np.ptp(epoch, axis=1)  # (n_ch,)
+        # Artifact rejection: peak-to-peak in the rejection window only.
+        # By default reject_tmax=0.0 so we check the PRE-stimulus baseline
+        # (-500ms to 0ms). This avoids the post-stimulus TMS artifact window
+        # contaminating the rejection decision — a standard TMS-EEG practice.
+        rej_end_idx = int((reject_tmax - tmin) * sfreq)
+        rej_end_idx = max(1, min(rej_end_idx, epoch.shape[1]))
+        pp = np.ptp(epoch[:, :rej_end_idx], axis=1)
         if np.any(pp > reject_uv):
             n_rejected += 1
             continue
@@ -657,7 +663,7 @@ def _dedup_markers(positions: List[int], sfreq: float,
 
 
 def _detect_periodic_response_train(positions: List[int], sfreq: float,
-                                     min_events: int = 20, max_cv: float = 0.10,
+                                     min_events: int = 20, max_cv: float = 0.30,
                                      gap_seconds: float = 30.0) -> bool:
     """Check if event positions form periodic blocks (likely TMS TTL pulses).
 
@@ -846,28 +852,40 @@ def analyze_file(
     resp_positions = [m["position"] - 1 for m in resp_markers]
     resp_used_as_stim = False
 
-    # ── Deduplication: remove double markers within dedup_gap_ms of each other ──
-    # Triggered automatically whenever there is no explicit tms_marker filter,
-    # because dual-port setups fire two codes per pulse and the combined ISI
-    # distribution is bimodal (fails the periodicity check).
+    # ── Deduplication + periodicity check ──
+    # When tms_marker is explicitly set, the user has identified these markers
+    # as TMS triggers — skip the periodicity check and use them directly.
+    # This supports jittered-ISI protocols (CV > 0.10) which fail the check.
+    # Auto-detection (no tms_marker) still requires periodicity to avoid false
+    # positives from Response markers that are not TMS triggers.
     if len(stim_positions) == 0 and len(resp_positions) > 0:
-        resp_positions = _dedup_markers(resp_positions, sfreq, min_gap_ms=dedup_gap_ms)
-
-    if len(stim_positions) == 0 and len(resp_positions) > 0:
-        if _detect_periodic_response_train(resp_positions, sfreq):
+        if tms_marker:
+            # Explicit selection: trust the user, only dedup if needed
+            resp_positions = _dedup_markers(resp_positions, sfreq, min_gap_ms=dedup_gap_ms)
             logger.info(
-                f"No Stimulus markers found, but {len(resp_positions)} Response markers "
-                f"form a periodic train (likely TMS TTL). Using Response markers as stimuli."
+                f"tms_marker explicitly set — skipping periodicity check. "
+                f"Using {len(resp_positions)} Response markers as TMS triggers."
             )
             stim_positions = resp_positions
             stim_markers = resp_markers
             resp_used_as_stim = True
         else:
-            logger.warning(
-                "Response markers exist but do not look periodic — not using as TMS triggers. "
-                "Tip: set tms_marker='256' (or the correct code) in the sidebar to select "
-                "only the TMS pulse markers and ignore auxiliary codes."
-            )
+            # Auto-detection: dedup first, then require periodicity
+            resp_positions = _dedup_markers(resp_positions, sfreq, min_gap_ms=dedup_gap_ms)
+            if _detect_periodic_response_train(resp_positions, sfreq):
+                logger.info(
+                    f"No Stimulus markers found, but {len(resp_positions)} Response markers "
+                    f"form a periodic train (likely TMS TTL). Using Response markers as stimuli."
+                )
+                stim_positions = resp_positions
+                stim_markers = resp_markers
+                resp_used_as_stim = True
+            else:
+                logger.warning(
+                    "Response markers exist but do not look periodic — not using as TMS triggers. "
+                    "Tip: set tms_marker='256' (or the correct code) in the sidebar to select "
+                    "only the TMS pulse markers and ignore auxiliary codes."
+                )
 
     # Also collect all markers for display
     all_marker_positions = [m["position"] - 1 for m in markers]
@@ -1004,6 +1022,7 @@ def analyze_file(
             seg_data, sess_events_local, sfreq_proc,
             tmin=-0.5, tmax=0.35,
             reject_uv=reject_uv,
+            reject_tmax=0.0,  # check baseline only (-500ms to 0ms)
             max_epochs=max_epochs,
         )
         n_used = epochs.shape[2]  # actual count after optional cap
