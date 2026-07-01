@@ -368,34 +368,31 @@ def extract_epochs(
     reject_tmax: float = 0.0,
     max_epochs: Optional[int] = None,
     random_seed: int = 42,
-) -> Tuple[np.ndarray, np.ndarray, int, int]:
+) -> Tuple[np.ndarray, np.ndarray, int, int, Dict]:
     """Extract epochs around stimulus positions.
-
-    Parameters
-    ----------
-    max_epochs : int or None
-        If set, randomly subsample accepted epochs to this number after
-        artifact rejection. Use the same value across all subjects to
-        keep epoch counts balanced (recommended: minimum clean count
-        across the cohort, or a fixed target such as 60).
-    random_seed : int
-        Seed for the random subsampler so results are reproducible.
 
     Returns
     -------
-    epochs : ndarray, shape (n_ch, n_times, n_epochs)
-    times  : ndarray, shape (n_times,)
-    n_accepted : int   (before capping)
-    n_rejected : int
+    epochs      : ndarray (n_ch, n_times, n_epochs)
+    times       : ndarray (n_times,)
+    n_accepted  : int  — accepted count before capping
+    n_rejected  : int
+    reject_stats: dict with per-channel rejection details
     """
     n_ch, n_samples = data.shape
     s_start = int(tmin * sfreq)
     s_end = int(tmax * sfreq)
     n_times = s_end - s_start + 1
     times = np.linspace(tmin, tmax, n_times)
+    rej_end_idx = int((reject_tmax - tmin) * sfreq)
+    rej_end_idx = max(1, min(rej_end_idx, n_times))
 
     epochs_list = []
     n_rejected = 0
+    # Per-channel: how many times did this channel cause a rejection
+    ch_reject_count = np.zeros(n_ch, dtype=int)
+    # Per-channel: max peak-to-peak seen in the rejection window (across all epochs)
+    ch_max_pp = np.zeros(n_ch)
 
     for pos in stim_positions:
         start = pos + s_start
@@ -405,27 +402,27 @@ def extract_epochs(
             n_rejected += 1
             continue
 
-        epoch = data[:, start:end]  # (n_ch, n_times)
-
-        # Artifact rejection: peak-to-peak in the rejection window only.
-        # By default reject_tmax=0.0 so we check the PRE-stimulus baseline
-        # (-500ms to 0ms). This avoids the post-stimulus TMS artifact window
-        # contaminating the rejection decision — a standard TMS-EEG practice.
-        rej_end_idx = int((reject_tmax - tmin) * sfreq)
-        rej_end_idx = max(1, min(rej_end_idx, epoch.shape[1]))
+        epoch = data[:, start:end]
         pp = np.ptp(epoch[:, :rej_end_idx], axis=1)
-        if np.any(pp > reject_uv):
+        ch_max_pp = np.maximum(ch_max_pp, pp)
+
+        bad_mask = pp > reject_uv
+        if np.any(bad_mask):
+            ch_reject_count[bad_mask] += 1
             n_rejected += 1
             continue
 
         epochs_list.append(epoch)
 
     if not epochs_list:
-        return np.empty((n_ch, n_times, 0)), times, 0, n_rejected
+        reject_stats = _make_reject_stats(
+            reject_uv, tmin, reject_tmax, 0, n_rejected,
+            ch_reject_count, ch_max_pp,
+        )
+        return np.empty((n_ch, n_times, 0)), times, 0, n_rejected, reject_stats
 
     n_accepted = len(epochs_list)
 
-    # Optional epoch cap: subsample to max_epochs for cross-subject balance
     if max_epochs is not None and 0 < max_epochs < n_accepted:
         rng = np.random.default_rng(random_seed)
         idx = rng.choice(n_accepted, size=max_epochs, replace=False)
@@ -433,8 +430,31 @@ def extract_epochs(
         epochs_list = [epochs_list[i] for i in idx]
         logger.info(f"  [EPOCHS] Subsampled {n_accepted} → {max_epochs} epochs (seed={random_seed})")
 
-    epochs = np.stack(epochs_list, axis=2)  # (n_ch, n_times, n_epochs)
-    return epochs, times, n_accepted, n_rejected
+    epochs = np.stack(epochs_list, axis=2)
+    reject_stats = _make_reject_stats(
+        reject_uv, tmin, reject_tmax, n_accepted, n_rejected,
+        ch_reject_count, ch_max_pp,
+    )
+    return epochs, times, n_accepted, n_rejected, reject_stats
+
+
+def _make_reject_stats(
+    threshold_uv: float,
+    tmin: float,
+    reject_tmax: float,
+    n_accepted: int,
+    n_rejected: int,
+    ch_reject_count: "np.ndarray",
+    ch_max_pp: "np.ndarray",
+) -> Dict:
+    return {
+        "threshold_uv": threshold_uv,
+        "window_ms": (int(tmin * 1000), int(reject_tmax * 1000)),
+        "n_accepted": n_accepted,
+        "n_rejected": n_rejected,
+        "ch_reject_count": ch_reject_count.tolist(),
+        "ch_max_pp_uv": (ch_max_pp * 1e6).tolist(),
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1011,13 +1031,15 @@ def analyze_file(
         logger.info(f"  [FILTER] Bandpass 0.1–45 Hz applied")
 
         # ── Step 8: Epoch extraction ──
-        epochs, times, n_accepted, n_rejected = extract_epochs(
+        epochs, times, n_accepted, n_rejected, reject_stats = extract_epochs(
             seg_data, sess_events_local, sfreq_proc,
             tmin=-0.5, tmax=0.35,
             reject_uv=reject_uv,
             reject_tmax=0.0,  # check baseline only (-500ms to 0ms)
             max_epochs=max_epochs,
         )
+        # Attach channel names to rejection stats
+        reject_stats["ch_names"] = list(ch_names_eeg)
         n_used = epochs.shape[2]  # actual count after optional cap
         _cap_msg = f", capped to {n_used}" if max_epochs and n_used < n_accepted else ""
         _exact_warn = ""
@@ -1041,6 +1063,7 @@ def analyze_file(
                 "n_events": sess["n_events"],
                 "n_accepted": n_accepted,
                 "n_rejected": n_rejected,
+                "reject_stats": reject_stats,
                 "pcist": None,
                 "error": "Too few epochs after rejection",
                 "start_time": sess["start_time"],
@@ -1117,6 +1140,7 @@ def analyze_file(
                 "n_events": sess["n_events"],
                 "n_accepted": n_accepted,
                 "n_rejected": n_rejected,
+                "reject_stats": reject_stats,
                 "n_channels_used": n_ch_used,
                 "bad_channels": bad_ch_names if bad_ch_names else [],
                 # PCIst results (primary metric)
@@ -1155,6 +1179,7 @@ def analyze_file(
                 "n_events": sess["n_events"],
                 "n_accepted": n_accepted,
                 "n_rejected": n_rejected,
+                "reject_stats": reject_stats,
                 "pcist": None,
                 "error": str(e),
                 "start_time": sess["start_time"],
