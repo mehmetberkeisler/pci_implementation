@@ -625,7 +625,9 @@ def _make_reject_stats(
         "n_accepted": n_accepted,
         "n_rejected": n_rejected,
         "ch_reject_count": ch_reject_count.tolist(),
-        "ch_max_pp_uv": (ch_max_pp * 1e6).tolist(),
+        # Data is already in µV (reject_uv threshold operates on these same
+        # peak-to-peak values), so no unit conversion is needed here.
+        "ch_max_pp_uv": ch_max_pp.tolist(),
     }
 
 
@@ -1209,13 +1211,22 @@ def analyze_file(
             elif action == "keep":
                 pass  # include as-is
 
-        # Also honour explicit overrides for channels auto-marked as good
+        # Also honour explicit overrides for channels the detector did NOT flag
+        # (e.g. a channel that drives epoch rejection but whose whole-segment
+        # variance stays under the noisy threshold). All four actions apply.
         for ch, action in _overrides.items():
-            if ch in bad_ch_names:
-                continue  # already handled above
-            if action == "drop" and ch in ch_names_eeg:
+            if ch in bad_ch_names or ch not in ch_names_eeg:
+                continue  # flagged channels already handled above
+            if action == "drop":
                 final_bad.append(ch)
                 bad_stats[ch] = {**bad_stats.get(ch, {}), "reason": "User-forced drop", "flagged": True}
+            elif action == "interpolate_spline":
+                to_interp_spline.append(ch)
+                bad_stats[ch] = {**bad_stats.get(ch, {}), "reason": "User-forced interpolate", "flagged": True}
+            elif action == "interpolate_neighbors":
+                to_interp_neighbors.append(ch)
+                bad_stats[ch] = {**bad_stats.get(ch, {}), "reason": "User-forced interpolate", "flagged": True}
+            # "keep" on an unflagged channel is a no-op (it's already included)
 
         # Every flagged-bad channel must be excluded from the interpolation
         # basis so a channel about to be dropped can't poison the fit of the

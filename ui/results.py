@@ -27,63 +27,104 @@ _INTERP_OPTIONS = {
 }
 
 
+def _rejection_drivers(sess: Dict[str, Any], flagged: Dict[str, Dict]) -> list:
+    """Channels that drive epoch rejection but the variance detector did NOT
+    flag (e.g. intermittent drifts/pops). Returns [(name, count, max_pp), ...]
+    sorted by rejection count, excluding channels already flagged."""
+    rs = sess.get("reject_stats") or {}
+    names = rs.get("ch_names", []) or []
+    counts = rs.get("ch_reject_count", []) or []
+    pps = rs.get("ch_max_pp_uv", []) or []
+    total = (rs.get("n_accepted", 0) + rs.get("n_rejected", 0)) or 1
+    thresh = max(3, int(0.05 * total))  # >=5% of epochs, at least 3
+    drivers = [
+        (n, c, p)
+        for n, c, p in zip(names, counts, pps)
+        if c >= thresh and n not in flagged
+    ]
+    drivers.sort(key=lambda x: x[1], reverse=True)
+    return drivers
+
+
 def _render_bad_channel_manager(sess: Dict[str, Any], sess_key: str) -> None:
-    """Show bad channel stats and per-channel action dropdowns."""
+    """Per-channel action dropdowns for both variance-flagged channels and
+    channels that drive epoch rejection."""
     bad_stats: Dict[str, Dict] = sess.get("bad_ch_stats") or {}
     flagged = {ch: s for ch, s in bad_stats.items() if s.get("flagged")}
     overrides_applied = sess.get("ch_overrides_applied") or {}
+    drivers = _rejection_drivers(sess, flagged)
 
-    if not flagged:
+    if not flagged and not drivers:
         return
-
-    st.markdown(
-        f"**Channel quality — {len(flagged)} flagged channel(s)** "
-        f"— set action per channel, then Re-run"
-    )
-    st.caption(
-        "Set an action for each flagged channel and press "
-        "**Re-run analysis** to apply."
-    )
 
     ch_overrides = dict(st.session_state.get("ch_overrides") or {})
     changed = False
 
-    for ch, info in sorted(flagged.items()):
-        reason = info.get("reason", "")
-        rms = info.get("rms_uv", 0.0)
-        ratio = info.get("var_ratio", 0.0)
-        current = ch_overrides.get(ch, "drop")
-
+    def _row(ch: str, caption: str, default_action: str, key_suffix: str) -> None:
+        nonlocal changed
+        current = ch_overrides.get(ch, default_action)
         col1, col2, col3 = st.columns([2, 2, 4])
         col1.markdown(f"**{ch}**")
-        col2.caption(f"{reason}  \n{rms:.1f} µV RMS · {ratio:.1f}× median")
+        col2.caption(caption)
         chosen = col3.selectbox(
             f"Action for {ch}",
             options=list(_INTERP_OPTIONS.keys()),
             index=list(_INTERP_OPTIONS.keys()).index(current),
             format_func=lambda k: _INTERP_OPTIONS[k],
-            key=f"ch_override_{sess_key}_{ch}",
+            key=f"ch_override_{sess_key}_{key_suffix}_{ch}",
             label_visibility="collapsed",
         )
         if chosen != current:
             ch_overrides[ch] = chosen
             changed = True
-        elif ch not in ch_overrides:
-            ch_overrides[ch] = "drop"
+        elif default_action != "keep" and ch not in ch_overrides:
+            # record the effective default for flagged channels so it persists
+            ch_overrides[ch] = default_action
+
+    # ── Section 1: variance-flagged channels (default: drop) ────────────────
+    if flagged:
+        st.markdown(
+            f"**Channel quality — {len(flagged)} flagged channel(s)** "
+            f"— set action per channel, then Re-run"
+        )
+        st.caption("High-variance channels. Default action is Drop.")
+        for ch, info in sorted(flagged.items()):
+            reason = info.get("reason", "")
+            rms = info.get("rms_uv", 0.0)
+            ratio = info.get("var_ratio", 0.0)
+            _row(ch, f"{reason}  \n{rms:.1f} µV RMS · {ratio:.1f}× median",
+                 default_action="drop", key_suffix="flag")
+
+    # ── Section 2: channels driving epoch rejection (default: keep) ─────────
+    if drivers:
+        total = (sess.get("reject_stats", {}).get("n_accepted", 0)
+                 + sess.get("reject_stats", {}).get("n_rejected", 0))
+        st.markdown(
+            f"**Rejection-driving channels — {len(drivers)} channel(s)** "
+            f"— not auto-flagged, but cause epoch loss"
+        )
+        st.caption(
+            "These passed the variance check but exceed the amplitude threshold "
+            "in many epochs' baselines. Interpolating them can recover epochs. "
+            "Default is Keep (no change)."
+        )
+        for ch, count, pp in drivers:
+            _row(ch, f"caused {count}/{total} epoch rejections  \n"
+                     f"max {pp:.0f} µV peak-to-peak",
+                 default_action="keep", key_suffix="rej")
 
     if changed:
         st.session_state["ch_overrides"] = ch_overrides
         st.info("Action updated — press **Re-run analysis** to apply.")
-    else:
-        applied_flagged = {
-            ch: act for ch, act in overrides_applied.items() if ch in flagged
-        }
-        if applied_flagged:
+    elif overrides_applied:
+        shown = {ch: act for ch, act in overrides_applied.items()
+                 if act and act != "keep"}
+        if shown:
             st.caption(
                 "Last run actions: "
                 + ", ".join(
                     f"{ch}: *{_INTERP_OPTIONS.get(act, act)}*"
-                    for ch, act in applied_flagged.items()
+                    for ch, act in shown.items()
                 )
             )
 
