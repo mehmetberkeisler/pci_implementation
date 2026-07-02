@@ -69,6 +69,77 @@ def pcist_bar(sessions: List[Dict[str, Any]]):
     return fig
 
 
+# ── Single-session hero (used when only one session is present) ────────────
+def single_session_summary(session: Dict[str, Any], art_win=(-2, 10)):
+    """A wide, self-contained evoked-response figure for a lone session.
+
+    Shown instead of the cross-session bar/overlay when there is exactly one
+    session, where those comparison plots would be a single bar and an empty
+    'need two sessions' box.
+    """
+    fig, ax = plt.subplots(figsize=(11, 3.8))
+
+    t_ms = np.asarray(session.get("evoked_times") or [], dtype=float)
+    gfp = np.asarray(session.get("evoked_gfp") or [], dtype=float)
+    evoked = np.asarray(session.get("evoked_data") or [], dtype=float)
+
+    if not t_ms.size or not gfp.size:
+        ax.text(0.5, 0.5, "no evoked data", ha="center", va="center",
+                transform=ax.transAxes, color="#999")
+        ax.set_xticks([]); ax.set_yticks([])
+        return fig
+
+    # Faded butterfly behind the GFP for context.
+    if evoked.size:
+        n_ch = evoked.shape[0]
+        alpha = max(0.05, min(0.28, 6.0 / max(n_ch, 1)))
+        ax.plot(t_ms, evoked.T, color="#9fb0bd", alpha=alpha, lw=0.4)
+
+    ax.plot(t_ms, gfp, color="#0f1c26", lw=1.8, label="GFP", zorder=5)
+    ax.fill_between(t_ms, gfp, color=ACCENT, alpha=0.10, zorder=4)
+
+    # Stimulus, artifact, and response context.
+    ax.axvline(0, color=FAIL, ls="--", lw=1.0, zorder=3)
+    ax.axvspan(art_win[0], art_win[1], color="#fbe6e8", alpha=0.5, zorder=1)
+    ax.axvspan(0, 300, color="#e6f4ea", alpha=0.35, zorder=0)
+
+    ymax = float(np.nanmax(gfp)) if gfp.size else 1.0
+    ymax = ymax * 1.25 if ymax > 0 else 1.0
+    for name, ptime in {"P30": 30, "N45": 45, "N100": 100, "P180": 180}.items():
+        ax.axvline(ptime, color="#c8cfd6", ls=":", lw=0.6, zorder=2)
+        ax.text(ptime, ymax * 0.98, name, ha="center", va="top",
+                fontsize=7, color="#8090a0")
+
+    # Result annotation box.
+    pv = session.get("pcist")
+    snr = session.get("snr")
+    ncomp = session.get("n_components")
+    n_used = session.get("n_used", session.get("n_accepted", 0))
+    n_evt = session.get("n_events", 0)
+    lines = []
+    if pv is not None:
+        lines.append(f"PCIst = {pv:.1f}")
+    if ncomp is not None:
+        lines.append(f"{ncomp} components")
+    if snr is not None:
+        lines.append(f"SNR = {snr:.2f}")
+    lines.append(f"{n_used}/{n_evt} epochs")
+    ax.text(
+        0.985, 0.95, "\n".join(lines), transform=ax.transAxes,
+        ha="right", va="top", fontsize=8.5, color="#0f1c26",
+        bbox=dict(boxstyle="round,pad=0.5", fc="white", ec="#e3e8ed", lw=0.8),
+        zorder=6,
+    )
+
+    ax.set_xlim(-100, 350)
+    ax.set_ylim(0, ymax)
+    ax.set_xlabel("Time (ms)")
+    ax.set_ylabel("GFP (µV)")
+    ax.set_title(f'{session.get("label", "Session")} - global field power')
+    fig.tight_layout()
+    return fig
+
+
 # ── Cross-session GFP overlay ──────────────────────────────────────────────
 def gfp_overlay(sessions: List[Dict[str, Any]], art_win=(-2, 10)):
     gfp_sessions = [

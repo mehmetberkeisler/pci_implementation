@@ -390,15 +390,19 @@ def render(result: Dict[str, Any]) -> None:
     valid = [s for s in sessions if s.get("pcist") is not None]
     failed = [s for s in sessions if s.get("pcist") is None]
 
-    # 3. Cross-session comparison
+    # 3. Cross-session comparison (or a single-session hero when there is one)
     if valid:
-        c1, c2 = st.columns([1, 1])
-        with c1:
-            fig = plots_mod.pcist_bar(valid)
+        if len(valid) == 1:
+            fig = plots_mod.single_session_summary(valid[0], art_win=art_win)
             st.pyplot(fig); plt.close(fig)
-        with c2:
-            fig = plots_mod.gfp_overlay(valid, art_win=art_win)
-            st.pyplot(fig); plt.close(fig)
+        else:
+            c1, c2 = st.columns([1, 1])
+            with c1:
+                fig = plots_mod.pcist_bar(valid)
+                st.pyplot(fig); plt.close(fig)
+            with c2:
+                fig = plots_mod.gfp_overlay(valid, art_win=art_win)
+                st.pyplot(fig); plt.close(fig)
 
         # 4. Summary table
         with st.expander("Summary table", expanded=True):
