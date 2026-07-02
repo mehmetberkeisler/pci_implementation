@@ -411,6 +411,25 @@ def render() -> None:
                 "peak-to-peak in the response window will be rejected."
             )
 
+        # ── Automatic trigger-shift correction (optional) ───────────────────
+        st.markdown("---")
+        st.session_state["auto_trigger_shift"] = st.checkbox(
+            "Auto-correct trigger timing (optional)",
+            value=bool(st.session_state.get("auto_trigger_shift", False)),
+            help=(
+                "The trigger marker often lags the true TMS artifact by a few "
+                "milliseconds (TTL/response-port latency plus the artifact's "
+                "rise time). When enabled, each event is realigned to the "
+                "detected artifact peak per session, so interpolation and "
+                "epoching are centred correctly. The shift is capped at 20 ms."
+            ),
+        )
+        if st.session_state["auto_trigger_shift"]:
+            st.caption(
+                "Events will be realigned to the artifact peak detected in "
+                "each session (see the per-session warning for the applied shift)."
+            )
+
         with st.expander("Advanced (Comolatti defaults)", expanded=False):
             st.caption("Defaults follow Comolatti et al. 2019 TMS/EEG settings.")
             c1, c2 = st.columns(2)
@@ -485,6 +504,7 @@ def render() -> None:
             "max_epochs", "epoch_mode", "epoch_balance_enabled",
             "apply_ica", "ica_kurtosis_thresh",
             "reject_post_enabled", "reject_post_uv",
+            "auto_trigger_shift",
         ]
         st.markdown("---")
         with st.expander("Parameter presets", expanded=False):

@@ -101,6 +101,7 @@ def _run_analysis() -> None:
                 ica_kurtosis_thresh=float(ss.get("ica_kurtosis_thresh", 5.0)),
                 reject_post_uv=(float(ss.get("reject_post_uv", 800))
                                 if ss.get("reject_post_enabled", False) else None),
+                auto_trigger_shift=bool(ss.get("auto_trigger_shift", False)),
                 pcist_baseline_window=(-0.400, -0.050),
                 pcist_response_window=(0.0, 0.300),
                 pcist_k=float(ss["pcist_k"]),

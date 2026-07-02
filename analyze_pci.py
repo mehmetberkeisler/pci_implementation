@@ -982,6 +982,7 @@ def analyze_file(
     apply_ica: bool = False,
     ica_kurtosis_thresh: float = 5.0,
     reject_post_uv: Optional[float] = None,
+    auto_trigger_shift: bool = False,
     # PCIst parameters (Comolatti et al. 2019)
     pcist_baseline_window: Tuple[float, float] = (-0.400, -0.050),
     pcist_response_window: Tuple[float, float] = (0.000, 0.300),
@@ -1192,10 +1193,38 @@ def analyze_file(
             seg_data, sess_events_local, sfreq
         )
 
-        # ── Step 3: TMS artifact interpolation (cubic spline, -2 to +10 ms) ──
-        logger.info(f"  [ARTIFACT] Cubic spline interpolation [{artifact_window_ms[0]}, {artifact_window_ms[1]}] ms")
+        # ── Step 2c: Optional automatic trigger-shift correction ──
+        # The trigger marker can lag the true artifact peak (TTL/response-port
+        # latency + the artifact's own rise time). If enabled, realign every
+        # event to the detected artifact peak so interpolation and epoching are
+        # centred correctly. Capped at 20 ms to avoid pathological shifts.
+        #
+        # Aligning t=0 to the peak moves the pre-peak rise to about -offset ms,
+        # so the interpolation window start is widened to cover it; otherwise
+        # that residual spike would land in the baseline and reject every epoch.
+        trigger_timing["shift_applied_samples"] = 0
+        trigger_timing["shift_applied_ms"] = 0.0
+        art_win = artifact_window_ms
+        if auto_trigger_shift:
+            _shift = int(trigger_timing.get("offset_samples", 0))
+            _max_shift = int(0.020 * sfreq)
+            if 0 < abs(_shift) <= _max_shift:
+                _off_ms = float(trigger_timing.get("offset_ms", 0.0))
+                sess_events_local = [p + _shift for p in sess_events_local]
+                art_win = (min(artifact_window_ms[0], -(abs(_off_ms) + 2.0)),
+                           artifact_window_ms[1])
+                trigger_timing["shift_applied_samples"] = _shift
+                trigger_timing["shift_applied_ms"] = _off_ms
+                logger.info(
+                    f"  [TRIGGER SHIFT] Realigned events by {_shift} samples "
+                    f"({_off_ms:.1f} ms) to artifact peak; interpolation window "
+                    f"widened to [{art_win[0]:.1f}, {art_win[1]:.1f}] ms."
+                )
+
+        # ── Step 3: TMS artifact interpolation (cubic spline) ──
+        logger.info(f"  [ARTIFACT] Cubic spline interpolation [{art_win[0]}, {art_win[1]}] ms")
         seg_data = interpolate_tms_artifact(
-            seg_data, sess_events_local, sfreq, artifact_window_ms, method="cubic"
+            seg_data, sess_events_local, sfreq, art_win, method="cubic"
         )
 
         # ── Step 4: Downsample ──
@@ -1404,7 +1433,14 @@ def analyze_file(
                     "No SVD components survived SNR filtering. "
                     "Possible causes: weak TMS response or noisy data."
                 )
-            if abs(trigger_timing["offset_ms"]) > 2.0:
+            if trigger_timing.get("shift_applied_samples"):
+                warnings_list.append(
+                    f"Trigger timing offset: {trigger_timing['offset_ms']:.1f} ms. "
+                    f"Auto-correction applied: events realigned by "
+                    f"{trigger_timing['shift_applied_samples']} samples to the "
+                    f"artifact peak."
+                )
+            elif abs(trigger_timing["offset_ms"]) > 2.0:
                 warnings_list.append(
                     f"Trigger timing offset: {trigger_timing['offset_ms']:.1f} ms. "
                     f"{trigger_timing['recommendation']}"
