@@ -15,7 +15,7 @@ evoked response by:
 1. **SVD dimensionality reduction** on the response-window evoked matrix,
    retaining components up to a cumulative variance threshold (default 99 %)
    and filtering by per-component signal-to-noise ratio.
-2. **State-transition quantification** — for each retained component, count
+2. **State-transition quantification** - for each retained component, count
    state transitions in a baseline recurrence matrix and a response
    recurrence matrix across a sweep of distance thresholds; pick the
    threshold that maximises ΔNST = NST_response − k · NST_baseline
@@ -24,7 +24,7 @@ evoked response by:
 
 PCIst is computed by the authors' reference implementation
 (``renzocom/PCIst``) vendored under ``third_party/pcist_ref/``. Our wrapper
-handles unit conversion (seconds ↔ ms) and result packaging only — the
+handles unit conversion (seconds ↔ ms) and result packaging only - the
 underlying math is unmodified.
 
 ### Pipeline
@@ -36,7 +36,7 @@ BrainVision triple → parse headers/markers → session detection
   → decimate to target fs (default 1000 Hz)
   → automatic bad-channel detection (var > 5× median)
   → common average re-reference
-  → bandpass 0.1–45 Hz (zero-phase)
+  → bandpass 0.1-45 Hz (zero-phase)
   → epoch (-500, +350) ms, peak-to-peak reject at threshold µV
   → average → evoked
   → PCIst (reference implementation)
@@ -44,7 +44,7 @@ BrainVision triple → parse headers/markers → session detection
 
 ### Interpretation
 
-- **PCIst is not on a 0–1 scale.** It is a sum across retained SVD components
+- **PCIst is not on a 0-1 scale.** It is a sum across retained SVD components
   of ΔNST × n_response and therefore depends on sampling rate, response
   window, and SNR filtering. Use it for within-study, within-pipeline
   comparisons.

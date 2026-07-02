@@ -6,7 +6,7 @@ The sidebar is intentionally small. It does three things:
 2. Parses header + markers *without MNE* and builds a preview dict
    (``n_channels``, ``sfreq``, ``duration``, ``n_markers``, ``sessions``)
    so the main tab can show a recording summary immediately.
-3. Exposes the analysis knobs behind a single collapsed expander — most
+3. Exposes the analysis knobs behind a single collapsed expander - most
    users never need them.
 
 The actual expensive work (epoching, PCIst per session) runs from the
@@ -15,7 +15,6 @@ main tab's "Run analysis" button, not here.
 
 from __future__ import annotations
 
-import io
 import json
 import os
 import tempfile
@@ -95,7 +94,7 @@ def _build_preview(vhdr_path: str, gap_seconds: float) -> Dict[str, Any]:
         sessions = detect_sessions(
             stim_positions, sfreq=sfreq, gap_seconds=gap_seconds
         ) or []
-        # Mutates sessions in place; returns None — don't reassign.
+        # Mutates sessions in place; returns None - don't reassign.
         _label_sessions_from_comments(sessions, comment_markers, sfreq)
 
     return {
@@ -155,7 +154,7 @@ def _build_marker_candidates(vhdr_path: Optional[str], sfreq=None) -> list:
             dedup_note = f" → {n_dedup} after dedup" if n_dedup < n_raw else ""
             status = "✅" if auto_ok else ("⚠️" if 0.2 <= med_isi <= 15.0 else "❌")
             label = (
-                f"[{mtype}] {mdesc} — {n_raw}x{dedup_note} | "
+                f"[{mtype}] {mdesc} - {n_raw}x{dedup_note} | "
                 f"ISI {med_isi:.1f}s | CV {cv:.2f} {status}"
             )
             candidates.append({
@@ -177,11 +176,11 @@ def _build_marker_candidates(vhdr_path: Optional[str], sfreq=None) -> list:
 def _render_marker_selector(candidates: list) -> None:
     """Render marker selection UI and update session state."""
     if not candidates:
-        # No file uploaded yet or parse failed — keep text input fallback
+        # No file uploaded yet or parse failed - keep text input fallback
         st.session_state["tms_marker"] = st.text_input(
             "TMS marker code",
             value=st.session_state.get("tms_marker", ""),
-            placeholder="e.g. R256 — leave blank for auto",
+            placeholder="e.g. R256 - leave blank for auto",
         )
         st.session_state["tms_marker_type"] = ""
         return
@@ -204,7 +203,7 @@ def _render_marker_selector(candidates: list) -> None:
     # Auto-select when there is exactly one plausible candidate
     auto_candidates = [c for c in candidates if c["auto_ok"]]
     if len(candidates) == 1:
-        # Only one code in the file — always auto-select
+        # Only one code in the file - always auto-select
         chosen_idx = 1
         st.caption(
             f"TMS marker auto-selected: **{candidates[0]['description']}** "
@@ -310,7 +309,7 @@ def render() -> None:
             help=(
                 "Use this to equalize the epoch count across subjects. First run "
                 "every subject with this off to find the one with the fewest clean "
-                "epochs, then enter ~80–90% of that number here."
+                "epochs, then enter ~80-90% of that number here."
             ),
         )
         st.session_state["epoch_balance_enabled"] = balance_enabled
@@ -362,7 +361,7 @@ def render() -> None:
             help=(
                 "Fits FastICA after bandpass filtering. Components with high "
                 "kurtosis (spiky signals such as muscle artifacts) are removed "
-                "automatically. Adds ~15–30 s per session."
+                "automatically. Adds ~15-30 s per session."
             ),
         )
         if st.session_state["apply_ica"]:
@@ -475,7 +474,7 @@ def render() -> None:
                     for k, v in loaded.items():
                         if k in _PRESET_KEYS and v is not None:
                             st.session_state[k] = v
-                    st.success("Preset loaded — Re-run analysis to apply.")
+                    st.success("Preset loaded - Re-run analysis to apply.")
                     state_mod.reset_result()
                 except Exception as e:
                     st.error(f"Could not load preset: {e}")

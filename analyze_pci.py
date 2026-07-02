@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-TMS-EEG PCIst Analyzer — Single-file BrainVision loader with session detection.
+TMS-EEG PCIst Analyzer - Single-file BrainVision loader with session detection.
 Computes PCIst (Perturbational Complexity Index based on State Transitions)
 per Comolatti et al. 2019 (Brain Stimulation, 12(5):1280-1289).
 
-Standalone implementation — requires only numpy (+ standard library).
+Standalone implementation - requires only numpy (+ standard library).
 """
 
 import os
@@ -150,7 +150,7 @@ def load_eeg_data(eeg_path: str, info: Dict[str, Any]) -> np.ndarray:
     else:
         data = data.reshape(n_ch, n_samples_total)
 
-    # Apply resolution — use float32 to save memory on large files
+    # Apply resolution - use float32 to save memory on large files
     data = data.astype(np.float32)
     for i, ch in enumerate(info["channels"]):
         if ch["resolution"] != 0:
@@ -231,8 +231,8 @@ def bandpass_filter(data: np.ndarray, sfreq: float, low: float = 0.1, high: floa
     sharper rolloff without TEP latency shifts.
 
     Transition bands use cosine tapers to prevent ringing (Gibbs phenomenon):
-        Low:  0.05–0.1 Hz  (cosine taper)
-        High: 45–49.5 Hz   (cosine taper)
+        Low:  0.05-0.1 Hz  (cosine taper)
+        High: 45-49.5 Hz   (cosine taper)
     """
     from numpy.fft import rfft, irfft, rfftfreq
 
@@ -340,7 +340,7 @@ def detect_bad_channels(
 
     Returns
     -------
-    mask       : list[bool] — True = good channel
+    mask       : list[bool] - True = good channel
     bad_names  : list[str]
     reasons    : dict name → short reason string
     stats      : dict name → {rms_uv, var_ratio, reason, flagged}
@@ -400,8 +400,8 @@ def interpolate_bad_channels(
     Parameters
     ----------
     method : "spline" | "neighbors"
-        "spline"    — MNE spherical spline (standard 10-20 montage auto-matched)
-        "neighbors" — unweighted average of nearest channels by name heuristic
+        "spline"    - MNE spherical spline (standard 10-20 montage auto-matched)
+        "neighbors" - unweighted average of nearest channels by name heuristic
     exclude_from_basis : list[str] | None
         Other flagged-bad channels that must NOT be used as reference when
         reconstructing ``channels_to_interp``. Critical: without this, a
@@ -491,7 +491,7 @@ def _apply_ica(
         import mne
         from mne.preprocessing import ICA as _ICA
     except ImportError:
-        logger.warning("  [ICA] MNE not installed — skipping ICA step")
+        logger.warning("  [ICA] MNE not installed - skipping ICA step")
         return seg_data, []
 
     try:
@@ -526,7 +526,7 @@ def _apply_ica(
         return raw.get_data().astype(np.float32) * 1e6, excluded
 
     except Exception as e:
-        logger.warning(f"  [ICA] Failed — skipping: {e}")
+        logger.warning(f"  [ICA] Failed - skipping: {e}")
         return seg_data, []
 
 
@@ -547,7 +547,7 @@ def extract_epochs(
     -------
     epochs      : ndarray (n_ch, n_times, n_epochs)
     times       : ndarray (n_times,)
-    n_accepted  : int  — accepted count before capping
+    n_accepted  : int  - accepted count before capping
     n_rejected  : int
     reject_stats: dict with per-channel rejection details
     """
@@ -646,7 +646,7 @@ def _make_reject_stats(
 # and intracranial stimulations. Brain Stimulation, 12(5):1280-1289.
 # ═══════════════════════════════════════════════════════════════════════════
 
-from pcist import calc_PCIst  # noqa: E402, F401  — re-exported
+from pcist import calc_PCIst  # noqa: E402, F401  - re-exported
 
 
 def compute_snr(epochs: np.ndarray, times: np.ndarray) -> float:
@@ -692,10 +692,10 @@ def verify_trigger_timing(
     Returns
     -------
     info : dict
-        offset_ms : float — median offset (positive = artifact after trigger)
-        offset_samples : int — median offset in samples
-        offsets_ms : list — per-trial offsets
-        recommendation : str — suggested action
+        offset_ms : float - median offset (positive = artifact after trigger)
+        offset_samples : int - median offset in samples
+        offsets_ms : list - per-trial offsets
+        recommendation : str - suggested action
     """
     win_s = int(window_ms[0] * sfreq / 1000)
     win_e = int(window_ms[1] * sfreq / 1000)
@@ -729,7 +729,7 @@ def verify_trigger_timing(
 
     recommendation = ""
     if abs(median_offset) < 1.0:
-        recommendation = "Trigger alignment OK — artifact peak within ±1 ms of trigger."
+        recommendation = "Trigger alignment OK - artifact peak within ±1 ms of trigger."
     elif median_offset > 0:
         recommendation = (
             f"Systematic delay: artifact peaks {median_offset:.1f} ms AFTER trigger marker. "
@@ -745,7 +745,7 @@ def verify_trigger_timing(
 
     logger.info(
         f"  [TRIGGER VERIFY] Median artifact offset: {median_offset:.1f} ms "
-        f"({median_samples} samples) — {recommendation}"
+        f"({median_samples} samples) - {recommendation}"
     )
 
     return {
@@ -964,7 +964,7 @@ def analyze_file(
     Pipeline (Comolatti 2019 + 2023 Brain Stimulation consensus):
       1. Parse BrainVision → 2. Load segment → 3. TMS artifact interpolation →
       4. Downsample → 5. Bad channel detection → 6. CAR re-reference →
-      7. Bandpass 0.1–45 Hz → 8. Epoch extraction → 9. PCIst computation
+      7. Bandpass 0.1-45 Hz → 8. Epoch extraction → 9. PCIst computation
 
     Parameters
     ----------
@@ -1034,7 +1034,7 @@ def analyze_file(
     # ── Explicit TMS marker selection (user override) ──
     # tms_marker_type: "Stimulus" or "Response"
     # tms_marker:      description string (e.g. "R256", "S8192", "R 16")
-    # When both are set the user has explicitly identified the TMS markers —
+    # When both are set the user has explicitly identified the TMS markers -
     # skip all auto-detection and periodicity checks entirely.
     explicit_selection = bool(tms_marker and tms_marker_type)
     if explicit_selection:
@@ -1053,7 +1053,7 @@ def analyze_file(
         )
         logger.info(
             f"Using {len(sel_positions)} markers as TMS triggers "
-            f"(periodicity check skipped — explicit selection)."
+            f"(periodicity check skipped - explicit selection)."
         )
         stim_positions = sel_positions
         stim_markers = selected
@@ -1077,7 +1077,7 @@ def analyze_file(
                 resp_used_as_stim = True
             else:
                 logger.warning(
-                    "Response markers exist but do not look periodic — not using as TMS triggers. "
+                    "Response markers exist but do not look periodic - not using as TMS triggers. "
                     "Select the correct marker code in the sidebar."
                 )
 
@@ -1264,13 +1264,13 @@ def analyze_file(
             seg_data = seg_data[ch_mask]
             ch_names_eeg = kept_names
 
-        # ── Step 6: Average re-reference (CAR) — now on clean channels only ──
+        # ── Step 6: Average re-reference (CAR) - now on clean channels only ──
         seg_data = average_rereference(seg_data)
         logger.info(f"  [REREF] Common average reference applied ({seg_data.shape[0]} channels)")
 
-        # ── Step 7: Bandpass filter 0.1–45 Hz ──
+        # ── Step 7: Bandpass filter 0.1-45 Hz ──
         seg_data = bandpass_filter(seg_data, sfreq_proc, low=0.1, high=45.0)
-        logger.info(f"  [FILTER] Bandpass 0.1–45 Hz applied")
+        logger.info(f"  [FILTER] Bandpass 0.1-45 Hz applied")
 
         # ── Step 7b: ICA artifact removal (optional) ──
         ica_excluded: List[int] = []
@@ -1295,7 +1295,7 @@ def analyze_file(
         _exact_warn = ""
         if exact_epochs and max_epochs is not None and n_accepted < max_epochs:
             _exact_warn = (
-                f" — WARNING: exact mode requested {max_epochs} epochs but only "
+                f" - WARNING: exact mode requested {max_epochs} epochs but only "
                 f"{n_accepted} clean epochs available"
             )
             logger.warning(f"  [EPOCHS] Exact-epoch shortfall: {n_accepted} < {max_epochs}")
@@ -1312,6 +1312,7 @@ def analyze_file(
                 "label": sess["label"],
                 "n_events": sess["n_events"],
                 "n_accepted": n_accepted,
+                "n_used": n_used,
                 "n_rejected": n_rejected,
                 "reject_stats": reject_stats,
                 "bad_channels": bad_ch_names if bad_ch_names else [],
@@ -1332,7 +1333,7 @@ def analyze_file(
         snr_pass = snr >= min_snr
         if not snr_pass:
             logger.warning(
-                f"  [SNR GATE] SNR = {snr:.2f} < {min_snr:.1f} — "
+                f"  [SNR GATE] SNR = {snr:.2f} < {min_snr:.1f} - "
                 f"PCIst will be computed but flagged as UNRELIABLE."
             )
 
@@ -1362,7 +1363,7 @@ def analyze_file(
             warnings_list = []
             if not snr_pass:
                 warnings_list.append(
-                    f"SNR={snr:.2f} < {min_snr} — below exclusion threshold. "
+                    f"SNR={snr:.2f} < {min_snr} - below exclusion threshold. "
                     f"PCIst value may be UNRELIABLE."
                 )
             if pcist_result["n_components"] == 0:
@@ -1385,7 +1386,12 @@ def analyze_file(
                 warnings_list.append(
                     f"Exact-epoch shortfall: requested {max_epochs} epochs but only "
                     f"{n_accepted} clean epochs were available. "
-                    f"Results use {n_accepted} epochs — consider lowering the epoch cap."
+                    f"Results use {n_accepted} epochs - consider lowering the epoch cap."
+                )
+            if n_used < n_accepted:
+                warnings_list.append(
+                    f"Epoch cap active: {n_accepted} clean epochs available, "
+                    f"{n_used} used for PCIst (random subsample, seed=42)."
                 )
 
             n_ch_used = int(np.sum(ch_mask)) if bad_ch_names else len(ch_names_eeg)
@@ -1393,6 +1399,7 @@ def analyze_file(
                 "label": sess["label"],
                 "n_events": sess["n_events"],
                 "n_accepted": n_accepted,
+                "n_used": n_used,
                 "n_rejected": n_rejected,
                 "reject_stats": reject_stats,
                 "n_channels_used": n_ch_used,
@@ -1724,7 +1731,7 @@ body {{
 <div class="container">
 
 <div class="header">
-    <h1>Perturbational Complexity Index — TMS-EEG Analysis</h1>
+    <h1>Perturbational Complexity Index - TMS-EEG Analysis</h1>
     <div class="subtitle">Casali et al. (2013) framework | Bootstrap significance + Lempel-Ziv complexity</div>
 </div>
 

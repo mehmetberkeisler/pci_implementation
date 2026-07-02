@@ -1,4 +1,4 @@
-"""TMS-EEG PCIst Workbench — Streamlit entry point.
+"""TMS-EEG PCIst Workbench - Streamlit entry point.
 
 Thin orchestrator: page config, theme, tabs. All substantial UI lives in
 ``ui/`` submodules (sidebar, analyze_tab, results, plots, about, theme,
@@ -61,7 +61,7 @@ st.markdown(
       <p class="hero-sub">
         Sensor-space PCIst computed with the <code>renzocom/PCIst</code>
         reference implementation (Comolatti et&nbsp;al., Brain Stimulation, 2019).
-        Upload a BrainVision triple — sessions are auto-detected and analysed
+        Upload a BrainVision triple - sessions are auto-detected and analysed
         with QC indicators visible alongside every result.
       </p>
     </div>
@@ -75,7 +75,7 @@ st.markdown(
 sidebar_mod.render()
 
 # ---------------------------------------------------------------------------
-# Main: two tabs — Analyse, About
+# Main: two tabs - Analyse, About
 # ---------------------------------------------------------------------------
 tab_analyse, tab_about = st.tabs(["Analyse", "About PCIst"])
 

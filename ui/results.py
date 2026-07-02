@@ -21,8 +21,8 @@ from . import plots as plots_mod
 
 _INTERP_OPTIONS = {
     "drop": "Drop (exclude)",
-    "interpolate_spline": "Interpolate — spherical spline (MNE)",
-    "interpolate_neighbors": "Interpolate — average neighbors",
+    "interpolate_spline": "Interpolate: spherical spline (MNE)",
+    "interpolate_neighbors": "Interpolate: average neighbors",
     "keep": "Keep as-is (include despite flag)",
 }
 
@@ -84,8 +84,8 @@ def _render_bad_channel_manager(sess: Dict[str, Any], sess_key: str) -> None:
     # ── Section 1: variance-flagged channels (default: drop) ────────────────
     if flagged:
         st.markdown(
-            f"**Channel quality — {len(flagged)} flagged channel(s)** "
-            f"— set action per channel, then Re-run"
+            f"**Channel quality: {len(flagged)} flagged channel(s)** "
+            f"(set an action per channel, then Re-run)"
         )
         st.caption("High-variance channels. Default action is Drop.")
         for ch, info in sorted(flagged.items()):
@@ -100,8 +100,8 @@ def _render_bad_channel_manager(sess: Dict[str, Any], sess_key: str) -> None:
         total = (sess.get("reject_stats", {}).get("n_accepted", 0)
                  + sess.get("reject_stats", {}).get("n_rejected", 0))
         st.markdown(
-            f"**Rejection-driving channels — {len(drivers)} channel(s)** "
-            f"— not auto-flagged, but cause epoch loss"
+            f"**Rejection-driving channels: {len(drivers)} channel(s)** "
+            f"(not auto-flagged, but cause epoch loss)"
         )
         st.caption(
             "These passed the variance check but exceed the amplitude threshold "
@@ -115,7 +115,7 @@ def _render_bad_channel_manager(sess: Dict[str, Any], sess_key: str) -> None:
 
     if changed:
         st.session_state["ch_overrides"] = ch_overrides
-        st.info("Action updated — press **Re-run analysis** to apply.")
+        st.info("Action updated - press **Re-run analysis** to apply.")
     elif overrides_applied:
         shown = {ch: act for ch, act in overrides_applied.items()
                  if act and act != "keep"}
@@ -155,9 +155,9 @@ def _render_rejection_details(sess: Dict[str, Any]) -> None:
 
     pct = 100 * n_rej / total if total else 0
     st.markdown(
-        f"**Artifact rejection — {n_acc}/{total} accepted** "
+        f"**Artifact rejection: {n_acc}/{total} accepted** "
         f"({pct:.0f}% rejected) · threshold {thresh:.0f} µV · "
-        f"window {win[0]}–{win[1]} ms (baseline)"
+        f"window {win[0]} to {win[1]} ms (baseline)"
     )
     st.caption(
         f"**Method:** peak-to-peak amplitude in baseline window "
@@ -181,7 +181,7 @@ def _render_rejection_details(sess: Dict[str, Any]) -> None:
             ]
             st.dataframe(table_rows, use_container_width=True, hide_index=True)
         else:
-            st.success("No channel exceeded the threshold — all epochs accepted.")
+            st.success("No channel exceeded the threshold - all epochs accepted.")
     else:
         st.info("Channel-level breakdown not available.")
 
@@ -197,14 +197,16 @@ def _qc_status(sess: Dict[str, Any]) -> str:
 def _session_card(sess: Dict[str, Any]) -> str:
     status = _qc_status(sess)
     pv = sess.get("pcist")
-    score = f"{pv:.1f}" if pv is not None else "—"
-    n_acc = int(sess.get("n_accepted", 0))
+    score = f"{pv:.1f}" if pv is not None else "-"
+    # n_used = epochs actually fed to PCIst (after any epoch cap); fall back to
+    # n_accepted for results produced before n_used was tracked.
+    n_acc = int(sess.get("n_used", sess.get("n_accepted", 0)))
     n_evt = int(sess.get("n_events", 0))
     n_bad = len(sess.get("bad_channels", []) or [])
     snr = float(sess.get("snr", 0.0))
     label = html.escape(str(sess.get("label", "session")))
     badge = {"ok": "ok", "warn": "review", "fail": "failed"}[status]
-    # NOTE: no leading whitespace on any line — Streamlit's markdown parser
+    # NOTE: no leading whitespace on any line - Streamlit's markdown parser
     # treats 4+ space indented lines as code blocks and would print the raw
     # HTML verbatim instead of rendering it.
     return (
@@ -265,7 +267,8 @@ def _render_exports(res: Dict[str, Any]) -> None:
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["Session", "PCIst", "n_components", "SNR", "SNR_pass",
-                "Epochs_accepted", "Epochs_total", "Bad_channels", "Warnings"])
+                "Epochs_used", "Epochs_accepted", "Epochs_total",
+                "Bad_channels", "Warnings"])
     for s in valid:
         w.writerow([
             s["label"],
@@ -273,6 +276,7 @@ def _render_exports(res: Dict[str, Any]) -> None:
             s.get("n_components", ""),
             f'{s.get("snr", 0):.4f}',
             "Yes" if s.get("snr_pass", True) else "No",
+            s.get("n_used", s.get("n_accepted", 0)),
             s.get("n_accepted", 0),
             s.get("n_events", 0),
             "|".join(s.get("bad_channels", []) or []),
@@ -307,7 +311,7 @@ def _render_exports(res: Dict[str, Any]) -> None:
                     "label", "pcist", "n_components", "dNST",
                     "var_explained", "component_snrs", "cumvar",
                     "components_kept", "snr", "snr_pass",
-                    "trigger_timing", "n_accepted", "n_events",
+                    "trigger_timing", "n_used", "n_accepted", "n_events",
                     "bad_channels", "warnings",
                     "start_time", "end_time",
                 )
@@ -337,13 +341,13 @@ def _render_summary_table(sessions: List[Dict[str, Any]]) -> None:
     for s in sessions:
         pv = s.get("pcist")
         n_bad = len(s.get("bad_channels", []) or [])
-        n_used = s.get("n_channels_used", "—")
+        n_used = s.get("n_channels_used", "-")
         rows.append({
             "Session": s["label"],
-            "PCIst": f'{pv:.2f}' if pv is not None else "—",
-            "n_components": s.get("n_components", "—"),
+            "PCIst": f'{pv:.2f}' if pv is not None else "-",
+            "n_components": s.get("n_components", "-"),
             "SNR": f'{s.get("snr", 0):.2f}' + (" ✓" if s.get("snr_pass", True) else " ✗"),
-            "Epochs": f'{s.get("n_accepted", 0)}/{s.get("n_events", 0)}',
+            "Epochs": f'{s.get("n_used", s.get("n_accepted", 0))}/{s.get("n_events", 0)}',
             "Channels": f'{n_used}' + (f' (-{n_bad})' if n_bad else ''),
             "Warnings": "·" if not s.get("warnings") else str(len(s["warnings"])),
         })
@@ -391,9 +395,9 @@ def render(result: Dict[str, Any]) -> None:
         st.markdown("### Per-session detail")
         for i, s in enumerate(valid):
             title = (
-                f'{s["label"]} — PCIst = {s["pcist"]:.1f}'
+                f'{s["label"]} - PCIst = {s["pcist"]:.1f}'
                 f'  · {s.get("n_components", "?")} components'
-                f'  · {s.get("n_accepted", 0)}/{s.get("n_events", 0)} epochs'
+                f'  · {s.get("n_used", s.get("n_accepted", 0))}/{s.get("n_events", 0)} epochs'
             )
             with st.expander(title, expanded=(i == 0)):
                 for w in s.get("warnings", []) or []:
@@ -408,7 +412,7 @@ def render(result: Dict[str, Any]) -> None:
         st.markdown("### Failed sessions")
         for i, f in enumerate(failed):
             st.warning(
-                f'**{f["label"]}** — {f.get("error", "Unknown error")} '
+                f'**{f["label"]}** - {f.get("error", "Unknown error")} '
                 f'(events: {f.get("n_events", 0)}, accepted: {f.get("n_accepted", 0)})'
             )
             _render_bad_channel_manager(f, sess_key=f"failed_{i}")

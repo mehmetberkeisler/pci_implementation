@@ -1,5 +1,5 @@
 """
-PCIst wrapper — Perturbational Complexity Index based on State Transitions.
+PCIst wrapper - Perturbational Complexity Index based on State Transitions.
 
 This module is a thin adapter around the **vendored reference implementation**
 from Renzo Comolatti's repository (`third_party/pcist/pci_st.py`,
@@ -23,7 +23,7 @@ Design notes
   so the wrapper converts at the boundary.
 - The reference returns `dNST` as a Python list (after a comprehension); we
   always return lists/floats so the result dict is JSON-serialisable.
-- Any keys the pipeline consumes are built here explicitly — if the upstream
+- Any keys the pipeline consumes are built here explicitly - if the upstream
   schema drifts on a refresh, this file is the only thing to update.
 """
 
@@ -117,7 +117,7 @@ def calc_PCIst(
         )
 
     if np.any(np.isnan(evoked)):
-        logger.warning("[PCIst] evoked contains NaN — returning PCIst = 0.")
+        logger.warning("[PCIst] evoked contains NaN - returning PCIst = 0.")
         return _null_result()
 
     # ── Convert seconds → milliseconds for the reference implementation ────
@@ -148,9 +148,9 @@ def calc_PCIst(
 
     ref = _ref_calc_PCIst(evoked, times_ms, full_return=True, **par)
 
-    # The reference returns 0 (not a dict) on NaN — guard that shape.
+    # The reference returns 0 (not a dict) on NaN - guard that shape.
     if not isinstance(ref, dict):
-        logger.warning("[PCIst] reference returned scalar fallback — PCIst = 0.")
+        logger.warning("[PCIst] reference returned scalar fallback - PCIst = 0.")
         return _null_result()
 
     pcist_value = float(ref.get("PCI", 0.0))

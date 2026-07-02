@@ -61,7 +61,7 @@ def _preview_block(preview: dict) -> None:
         st.pyplot(fig); plt.close(fig)
     else:
         st.info(
-            "No distinct sessions detected — all stimulus events may belong to "
+            "No distinct sessions detected - all stimulus events may belong to "
             "a single session, or the gap threshold is too large."
         )
 
@@ -77,7 +77,7 @@ def _preview_block(preview: dict) -> None:
 def _run_analysis() -> None:
     """Invoke analyze_file with current sidebar parameters, write to session state."""
     ss = st.session_state
-    with st.spinner("Running PCIst pipeline — this takes ~30 s per session…"):
+    with st.spinner("Running PCIst pipeline - this takes ~30 s per session…"):
         try:
             _tms_marker = (ss.get("tms_marker") or "").strip() or None
             _tms_marker_type = (ss.get("tms_marker_type") or "").strip() or None

@@ -1,7 +1,7 @@
 """Visual theme for the PCIst Workbench.
 
 A single place to tune colour, typography, spacing, and matplotlib defaults.
-The CSS is intentionally minimal — enough to make the Streamlit defaults
+The CSS is intentionally minimal - enough to make the Streamlit defaults
 feel modern and consistent, nothing more.
 """
 

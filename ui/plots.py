@@ -100,7 +100,7 @@ def gfp_overlay(sessions: List[Dict[str, Any]], art_win=(-2, 10)):
     ax.set_ylabel("GFP (µV)")
     ax.set_xlim(-50, 350)
     ax.legend(loc="upper right", fontsize=8, frameon=False)
-    ax.set_title("Global Field Power — sessions overlaid")
+    ax.set_title("Global Field Power - sessions overlaid")
     fig.tight_layout()
     return fig
 
@@ -145,7 +145,7 @@ def session_detail(session: Dict[str, Any], art_win=(-2, 10)):
         ax.set_xlabel("SVD component"); ax.set_ylabel("Variance (%)")
         ax.legend(fontsize=7, frameon=False, loc="lower right")
     else:
-        ax.text(0.5, 0.5, "—", ha="center", va="center",
+        ax.text(0.5, 0.5, "-", ha="center", va="center",
                 transform=ax.transAxes, color="#999")
     ax.set_title("(b) SVD variance")
 
@@ -161,7 +161,7 @@ def session_detail(session: Dict[str, Any], art_win=(-2, 10)):
         ax.set_xlabel("SVD component")
         ax.set_ylabel("ΔNST × n_response")
     else:
-        ax.text(0.5, 0.5, "—", ha="center", va="center",
+        ax.text(0.5, 0.5, "-", ha="center", va="center",
                 transform=ax.transAxes, color="#999")
     ax.set_title("(c) Per-component complexity (ΔNST)")
 
@@ -176,7 +176,7 @@ def session_detail(session: Dict[str, Any], art_win=(-2, 10)):
         ax.set_xlabel("SVD component"); ax.set_ylabel("SNR")
         ax.legend(loc="upper right", fontsize=7, frameon=False)
     else:
-        ax.text(0.5, 0.5, "—", ha="center", va="center",
+        ax.text(0.5, 0.5, "-", ha="center", va="center",
                 transform=ax.transAxes, color="#999")
     ax.set_title("(d) Component SNRs")
 

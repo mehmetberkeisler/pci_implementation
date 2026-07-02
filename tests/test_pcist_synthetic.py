@@ -1,8 +1,8 @@
 """Ground-truth sanity checks for the reference-PCIst wrapper.
 
 These tests guard against regressions if the vendored pci_st.py is ever
-refreshed or the wrapper is changed. They are not a PCIst *validation* —
-that belongs with the authors' paper — but they pin down a few
+refreshed or the wrapper is changed. They are not a PCIst *validation* -
+that belongs with the authors' paper - but they pin down a few
 qualitative expectations:
 
 1. Flat baseline-like noise across response and baseline → PCIst near 0.
