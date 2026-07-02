@@ -165,6 +165,23 @@ def _render_rejection_details(sess: Dict[str, Any]) -> None:
         f"exceeds **{thresh:.0f} µV**."
     )
 
+    post_thr = rs.get("threshold_post_uv")
+    if post_thr:
+        pwin = rs.get("post_window_ms", (0, 300))
+        n_post = rs.get("n_rejected_post", 0)
+        st.caption(
+            f"**Post-stimulus check active:** epochs also rejected if any "
+            f"channel exceeds **{post_thr:.0f} µV** peak-to-peak in the "
+            f"response window [{pwin[0]} ms, {pwin[1]} ms]. "
+            f"{n_post} epoch(s) rejected on this criterion alone."
+        )
+    else:
+        st.caption(
+            "Note: rejection uses the baseline window only. Post-stimulus "
+            "artifacts in the response window are not caught here; enable "
+            "ICA or the optional post-stimulus rejection to control them."
+        )
+
     if ch_names and ch_rej:
         # Build per-channel table, sorted by rejection count descending
         rows = sorted(

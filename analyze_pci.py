@@ -538,6 +538,8 @@ def extract_epochs(
     tmax: float = 0.35,
     reject_uv: float = 150.0,
     reject_tmax: float = 0.0,
+    reject_post_uv: Optional[float] = None,
+    reject_post_window: Tuple[float, float] = (0.0, 0.3),
     max_epochs: Optional[int] = None,
     random_seed: int = 42,
 ) -> Tuple[np.ndarray, np.ndarray, int, int, Dict]:
@@ -559,8 +561,15 @@ def extract_epochs(
     rej_end_idx = int((reject_tmax - tmin) * sfreq)
     rej_end_idx = max(1, min(rej_end_idx, n_times))
 
+    # Optional post-stimulus gross-artifact window (indices into the epoch).
+    post_ini_idx = post_end_idx = None
+    if reject_post_uv is not None:
+        post_ini_idx = max(0, int((reject_post_window[0] - tmin) * sfreq))
+        post_end_idx = min(n_times, int((reject_post_window[1] - tmin) * sfreq))
+
     epochs_list = []
     n_rejected = 0
+    n_rejected_post = 0
     # Per-channel: how many times did this channel cause a rejection
     ch_reject_count = np.zeros(n_ch, dtype=int)
     # Per-channel: max peak-to-peak seen in the rejection window (across all epochs)
@@ -579,6 +588,17 @@ def extract_epochs(
         ch_max_pp = np.maximum(ch_max_pp, pp)
 
         bad_mask = pp > reject_uv
+
+        # Optional: reject gross post-stimulus artifacts (movement, big muscle)
+        # in the response window, using a separate, higher threshold so the
+        # genuine TMS-evoked response is preserved.
+        if reject_post_uv is not None:
+            pp_post = np.ptp(epoch[:, post_ini_idx:post_end_idx], axis=1)
+            post_bad = pp_post > reject_post_uv
+            if np.any(post_bad) and not np.any(bad_mask):
+                n_rejected_post += 1
+            bad_mask = bad_mask | post_bad
+
         if np.any(bad_mask):
             ch_reject_count[bad_mask] += 1
             n_rejected += 1
@@ -589,7 +609,8 @@ def extract_epochs(
     if not epochs_list:
         reject_stats = _make_reject_stats(
             reject_uv, tmin, reject_tmax, 0, n_rejected,
-            ch_reject_count, ch_max_pp,
+            ch_reject_count, ch_max_pp, reject_post_uv, n_rejected_post,
+            reject_post_window,
         )
         return np.empty((n_ch, n_times, 0)), times, 0, n_rejected, reject_stats
 
@@ -605,7 +626,8 @@ def extract_epochs(
     epochs = np.stack(epochs_list, axis=2)
     reject_stats = _make_reject_stats(
         reject_uv, tmin, reject_tmax, n_accepted, n_rejected,
-        ch_reject_count, ch_max_pp,
+        ch_reject_count, ch_max_pp, reject_post_uv, n_rejected_post,
+        reject_post_window,
     )
     return epochs, times, n_accepted, n_rejected, reject_stats
 
@@ -618,6 +640,9 @@ def _make_reject_stats(
     n_rejected: int,
     ch_reject_count: "np.ndarray",
     ch_max_pp: "np.ndarray",
+    reject_post_uv: Optional[float] = None,
+    n_rejected_post: int = 0,
+    reject_post_window: Tuple[float, float] = (0.0, 0.3),
 ) -> Dict:
     return {
         "threshold_uv": threshold_uv,
@@ -628,6 +653,11 @@ def _make_reject_stats(
         # Data is already in µV (reject_uv threshold operates on these same
         # peak-to-peak values), so no unit conversion is needed here.
         "ch_max_pp_uv": ch_max_pp.tolist(),
+        # Optional post-stimulus gross-artifact rejection (off when None)
+        "threshold_post_uv": reject_post_uv,
+        "n_rejected_post": n_rejected_post,
+        "post_window_ms": (int(reject_post_window[0] * 1000),
+                           int(reject_post_window[1] * 1000)),
     }
 
 
@@ -951,6 +981,7 @@ def analyze_file(
     dedup_gap_ms: float = 10.0,
     apply_ica: bool = False,
     ica_kurtosis_thresh: float = 5.0,
+    reject_post_uv: Optional[float] = None,
     # PCIst parameters (Comolatti et al. 2019)
     pcist_baseline_window: Tuple[float, float] = (-0.400, -0.050),
     pcist_response_window: Tuple[float, float] = (0.000, 0.300),
@@ -1285,7 +1316,9 @@ def analyze_file(
             seg_data, sess_events_local, sfreq_proc,
             tmin=-0.5, tmax=0.35,
             reject_uv=reject_uv,
-            reject_tmax=0.0,  # check baseline only (-500ms to 0ms)
+            reject_tmax=0.0,  # baseline check window (-500ms to 0ms)
+            reject_post_uv=reject_post_uv,  # optional post-stimulus gross-artifact check
+            reject_post_window=pcist_response_window,
             max_epochs=max_epochs,
         )
         # Attach channel names to rejection stats

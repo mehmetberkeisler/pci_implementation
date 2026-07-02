@@ -37,6 +37,9 @@ DEFAULTS = {
     # ICA artifact removal
     "apply_ica": False,
     "ica_kurtosis_thresh": 5.0,
+    # Optional post-stimulus gross-artifact rejection (response window)
+    "reject_post_enabled": False,
+    "reject_post_uv": 800,
     # Epoch balancing
     "epoch_balance_enabled": False,   # toggle for the epoch cap section
     "max_epochs": 0,                  # 0 = disabled; e.g. 60 to cap all subjects at 60

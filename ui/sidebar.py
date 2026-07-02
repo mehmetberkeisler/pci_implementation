@@ -380,6 +380,37 @@ def render() -> None:
                 "will be removed before analysis."
             )
 
+        # ── Post-stimulus gross-artifact rejection (optional) ───────────────
+        st.markdown("---")
+        st.session_state["reject_post_enabled"] = st.checkbox(
+            "Post-stimulus artifact rejection (optional)",
+            value=bool(st.session_state.get("reject_post_enabled", False)),
+            help=(
+                "The default amplitude check only looks at the baseline "
+                "(-500 to 0 ms), so gross artifacts in the response window "
+                "(movement, large muscle bursts) are not caught and can inflate "
+                "PCIst. Enable this to also reject epochs whose response-window "
+                "peak-to-peak exceeds a high threshold, while preserving the "
+                "genuine TMS-evoked response."
+            ),
+        )
+        if st.session_state["reject_post_enabled"]:
+            st.session_state["reject_post_uv"] = st.number_input(
+                "Post-stimulus reject threshold (uV)",
+                min_value=200, max_value=3000,
+                value=int(st.session_state.get("reject_post_uv", 800)),
+                step=50,
+                help=(
+                    "Set well above the expected TEP amplitude (typically "
+                    "under 150 uV) so only gross artifacts are removed. "
+                    "800 uV is a conservative starting point."
+                ),
+            )
+            st.caption(
+                f"Epochs exceeding {int(st.session_state['reject_post_uv'])} uV "
+                "peak-to-peak in the response window will be rejected."
+            )
+
         with st.expander("Advanced (Comolatti defaults)", expanded=False):
             st.caption("Defaults follow Comolatti et al. 2019 TMS/EEG settings.")
             c1, c2 = st.columns(2)
@@ -453,6 +484,7 @@ def render() -> None:
             "pcist_max_var", "pcist_n_steps", "min_snr_gate",
             "max_epochs", "epoch_mode", "epoch_balance_enabled",
             "apply_ica", "ica_kurtosis_thresh",
+            "reject_post_enabled", "reject_post_uv",
         ]
         st.markdown("---")
         with st.expander("Parameter presets", expanded=False):
