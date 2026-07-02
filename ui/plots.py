@@ -6,7 +6,7 @@ so callers don't need to tweak rcParams.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, List
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -131,7 +131,7 @@ def session_detail(session: Dict[str, Any], art_win=(-2, 10)):
     else:
         ax.text(0.5, 0.5, "no evoked data", ha="center", va="center",
                 transform=ax.transAxes, color="#999")
-    ax.set_title(f"(a) TEP butterfly + GFP")
+    ax.set_title("(a) TEP butterfly + GFP")
     ax.set_xlabel("Time (ms)"); ax.set_ylabel("Amplitude (µV)")
 
     # (b) SVD variance
